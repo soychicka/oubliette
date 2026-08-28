@@ -1,0 +1,568 @@
+#!/usr/bin/env bash
+# Builds a durable Rails application to try oubliette against by hand: real CRUD,
+# real JavaScript, and one passing test per framework oubliette knows about.
+#
+# It stops before migrating anything. Everything is green and in its default
+# location, so `rake oubliette` is yours to run, break, and roll back.
+set -euo pipefail
+
+unset BUNDLE_GEMFILE BUNDLE_PATH BUNDLE_BIN_PATH RUBYOPT || true
+export RBENV_VERSION="${RBENV_VERSION:-3.4.1}"
+
+GEM_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+export GEM_DIR
+APP="${1:-$HOME/developer/Projects/oubliette-playground}"
+
+rm -rf "$APP"
+mkdir -p "$(dirname "$APP")"
+
+echo "==> rails new"
+(cd "$(dirname "$APP")" && rails new "$(basename "$APP")" \
+  --skip-bootsnap --skip-kamal --skip-solid --skip-ci --skip-docker \
+  --skip-jbuilder --skip-brakeman --skip-rubocop --quiet)
+
+cd "$APP"
+
+cat >> Gemfile <<'RUBY'
+
+# Uncomment, then `bundle install`, to install oubliette and get its rake tasks.
+# Everything below is already installed and green without it.
+# gem "oubliette", path: "GEM_DIR_PLACEHOLDER"
+
+group :development, :test do
+  gem "rspec-rails"
+  gem "factory_bot_rails"
+end
+
+group :test do
+  gem "capybara"
+  gem "cucumber-rails", require: false
+  gem "database_cleaner-active_record"
+  gem "simplecov", require: false
+  gem "vcr"
+  gem "webmock"
+end
+RUBY
+ruby -i -pe "sub(%r{GEM_DIR_PLACEHOLDER}, ENV.fetch('GEM_DIR'))" Gemfile
+
+echo "==> bundle install"
+bundle install --quiet
+
+echo "==> CRUD"
+bin/rails generate scaffold Category name:string --quiet
+bin/rails generate scaffold Widget name:string quantity:integer available:boolean category:references --quiet
+bin/rails db:prepare
+
+ruby -i -pe 'sub(/^end$/, "  belongs_to :category\n\n  validates :name, presence: true\n  validates :quantity, numericality: { greater_than_or_equal_to: 0 }\n\n  def restock?\n    quantity < 5\n  end\nend")' app/models/widget.rb
+ruby -i -pe 'sub(/^end$/, "  has_many :widgets, dependent: :destroy\n\n  validates :name, presence: true\nend")' app/models/category.rb
+# The scaffold generators write their own specs, factories and tests. Clear them
+# out so the ones written further down are the only ones in the app -- two
+# `factory :category` definitions is an error, not a merge.
+rm -rf spec
+rm -f test/models/*_test.rb test/controllers/*_test.rb test/fixtures/*.yml
+
+# The scaffold renders a belongs_to as a bare id field. A dropdown is both nicer
+# to click and what `select "Hardware", from: "Category"` needs to find.
+ruby -i -pe 'sub(%r{form\.(text_field|number_field) :category_id}, %q{form.collection_select :category_id, Category.order(:name), :id, :name})' app/views/widgets/_form.html.erb
+grep -q "collection_select :category_id" app/views/widgets/_form.html.erb || {
+  echo "the category field was not converted to a select -- the scaffold template changed"
+  exit 1
+}
+
+ruby -i -pe 'sub(%r{^  root .*$}, "")' config/routes.rb
+ruby -i -pe 'sub(/^end$/, "  root \"widgets#index\"\nend")' config/routes.rb
+
+echo "==> javascript"
+mkdir -p app/javascript
+cat > app/javascript/restock.js <<'JS'
+// Plain CommonJS so jest runs it with no transform, and so a script tag can
+// load it in the browser without a build step.
+function restockLevel(quantity, threshold) {
+  if (typeof quantity !== "number" || Number.isNaN(quantity)) return "unknown";
+  if (quantity <= 0) return "out";
+  if (quantity < threshold) return "low";
+  return "ok";
+}
+
+function totalQuantity(widgets) {
+  return widgets.reduce(function (sum, widget) {
+    return sum + (widget.quantity || 0);
+  }, 0);
+}
+
+if (typeof window !== "undefined") {
+  window.restockLevel = restockLevel;
+  window.totalQuantity = totalQuantity;
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { restockLevel: restockLevel, totalQuantity: totalQuantity };
+}
+JS
+
+cat > app/javascript/counter.js <<'JS'
+document.addEventListener("click", function (event) {
+  var button = event.target.closest("[data-counter-step]");
+  if (!button) return;
+
+  var output = document.getElementById("counter-value");
+  var step = parseInt(button.dataset.counterStep, 10);
+  var next = parseInt(output.textContent, 10) + step;
+
+  output.textContent = next;
+  document.getElementById("counter-status").textContent =
+    window.restockLevel ? window.restockLevel(next, 5) : "unknown";
+});
+JS
+
+ruby -i -pe 'sub(%r{<%= javascript_importmap_tags %>}, %q{<%= javascript_importmap_tags %>\n    <%= javascript_include_tag "restock", "counter", defer: true %>})' app/views/layouts/application.html.erb
+
+cat >> app/views/widgets/index.html.erb <<'ERB'
+
+<section id="counter" style="margin-top:2rem">
+  <h2>Stock counter</h2>
+  <p>Quantity: <span id="counter-value">5</span> &mdash; <span id="counter-status">ok</span></p>
+  <button data-counter-step="1">Add one</button>
+  <button data-counter-step="-1">Remove one</button>
+</section>
+ERB
+
+cat > package.json <<'JSON'
+{
+  "name": "oubliette-playground",
+  "private": true,
+  "scripts": {
+    "test": "jest spec/javascript"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
+JSON
+
+echo "==> path helper that works with or without oubliette installed"
+cat > config/initializers/test_paths.rb <<'RUBY'
+# The one thing the application has to know about oubliette: ask it where a
+# directory went, and fall back to the framework default when it is not
+# installed. Nothing here loads oubliette or fails without it, which is what
+# lets the suites be green before the gem is uncommented in the Gemfile.
+module TestPaths
+  def self.dir(key, fallback)
+    relocated = defined?(Oubliette) ? Oubliette.path(key) : nil
+    relocated || Rails.root.join(fallback)
+  end
+end
+RUBY
+
+echo "==> generators"
+bin/rails generate rspec:install --quiet
+bin/rails generate cucumber:install --quiet
+
+echo "==> test assets, one framework at a time"
+mkdir -p spec/models spec/requests spec/system spec/factories spec/support \
+         spec/attributes spec/exemplars spec/javascript spec/vcr_cassettes \
+         test/models test/controllers test/unit test_results
+
+# ---------- shared support ----------
+cat > spec/support/restock.rb <<'RUBY'
+module RestockHelpers
+  def stocked_widget(quantity)
+    FactoryBot.create(:widget, quantity: quantity)
+  end
+end
+RUBY
+
+cat >> spec/rails_helper.rb <<'RUBY'
+
+require "vcr"
+
+Dir[File.join(TestPaths.dir("support", "spec/support"), "**", "*.rb")].sort.each { |file| require file }
+
+VCR.configure do |config|
+  config.cassette_library_dir = TestPaths.dir("vcr", "spec/vcr_cassettes").to_s
+  config.hook_into :webmock
+end
+
+# An example's type comes from the directory it sits in. Oubliette re-registers
+# these mappings against the relocated paths, so this keeps working after
+# `rake oubliette` -- which is worth watching for yourself.
+RSpec.configure(&:infer_spec_type_from_file_location!)
+
+RSpec.configure do |config|
+  config.include FactoryBot::Syntax::Methods
+  config.include RestockHelpers
+  config.before(:each, type: :system) { driven_by :rack_test }
+
+  # Minitest commits its fixtures to the test database and leaves them there, so
+  # a suite that creates a "Hardware" category would find two of them the moment
+  # `bin/rails test` has run once. Start from empty instead.
+  config.before(:suite) { PurgeTables.call }
+end
+RUBY
+
+cat > lib/purge_tables.rb <<'RUBY'
+# Empties every application table. Fixtures loaded by one framework outlive the
+# run that loaded them, and the other frameworks should not have to care.
+module PurgeTables
+  KEEP = %w[schema_migrations ar_internal_metadata].freeze
+
+  def self.call
+    connection = ActiveRecord::Base.connection
+    connection.truncate_tables(*(connection.tables - KEEP))
+  end
+end
+RUBY
+
+ruby -i -pe 'sub(%r{^require "vcr"$}, %q{require "vcr"
+require Rails.root.join("lib/purge_tables")})' spec/rails_helper.rb
+
+cat >> features/support/env.rb <<'RUBY'
+
+require Rails.root.join("lib/purge_tables")
+
+# Same reason as the rspec suite: minitest's fixtures persist in the test
+# database, and a scenario that creates its own category should not trip over
+# one left behind by a different framework.
+Before { PurgeTables.call }
+RUBY
+
+# ---------- factory_bot ----------
+cat > spec/factories/widgets.rb <<'RUBY'
+FactoryBot.define do
+  factory :category do
+    name { "Hardware" }
+  end
+
+  factory :widget do
+    name { "Bracket" }
+    quantity { 10 }
+    available { true }
+    category
+  end
+end
+RUBY
+
+# ---------- rspec: model ----------
+cat > spec/models/widget_spec.rb <<'RUBY'
+require "rails_helper"
+
+RSpec.describe Widget do
+  it "is valid with a name, a quantity and a category" do
+    expect(build(:widget)).to be_valid
+  end
+
+  it "refuses a negative quantity" do
+    expect(build(:widget, quantity: -1)).not_to be_valid
+  end
+
+  it "wants restocking below five" do
+    expect(stocked_widget(4)).to be_restock
+    expect(stocked_widget(5)).not_to be_restock
+  end
+
+  it "reads the attribute set kept under spec/attributes" do
+    attributes = YAML.load_file(TestPaths.dir("attributes", "spec/attributes").join("widget.yml"))
+
+    expect(described_class.new(attributes.merge(category: create(:category)))).to be_valid
+  end
+end
+RUBY
+
+cat > spec/attributes/widget.yml <<'YAML'
+name: Flange
+quantity: 12
+available: true
+YAML
+
+cat > spec/exemplars/widget.yml <<'YAML'
+name: Grommet
+quantity: 3
+available: false
+YAML
+
+# ---------- rspec: request ----------
+cat > spec/requests/widgets_spec.rb <<'RUBY'
+require "rails_helper"
+
+RSpec.describe "Widgets" do
+  it "lists them" do
+    widget = create(:widget, name: "Listed")
+    get widgets_path
+
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include(widget.name)
+  end
+
+  it "creates one" do
+    category = create(:category)
+
+    expect {
+      post widgets_path, params: { widget: { name: "Made", quantity: 2, available: true, category_id: category.id } }
+    }.to change(Widget, :count).by(1)
+  end
+end
+RUBY
+
+# ---------- rspec: system, via capybara ----------
+cat > spec/system/widgets_spec.rb <<'RUBY'
+require "rails_helper"
+
+RSpec.describe "Managing widgets", type: :system do
+  it "walks the whole CRUD path" do
+    create(:category, name: "Hardware")
+
+    visit widgets_path
+    click_on "New widget"
+    fill_in "Name", with: "Sprocket"
+    fill_in "Quantity", with: "7"
+    select "Hardware", from: "Category"
+    click_on "Create Widget"
+
+    expect(page).to have_text("Sprocket")
+  end
+end
+RUBY
+
+# ---------- rspec: vcr ----------
+cat > spec/vcr_cassettes/stock_feed.yml <<'YAML'
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://example.test/stock.json
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers: {}
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json
+    body:
+      encoding: UTF-8
+      string: '{"quantity":42}'
+  recorded_at: Thu, 28 Aug 2026 00:00:00 GMT
+recorded_with: VCR 6.0.0
+YAML
+
+cat > spec/requests/stock_feed_spec.rb <<'RUBY'
+require "rails_helper"
+require "net/http"
+
+RSpec.describe "the stock feed" do
+  it "reads the quantity from the recorded cassette" do
+    VCR.use_cassette("stock_feed") do
+      body = Net::HTTP.get(URI("https://example.test/stock.json"))
+
+      expect(JSON.parse(body)["quantity"]).to eq(42)
+    end
+  end
+end
+RUBY
+
+# ---------- cucumber ----------
+cat > features/widgets.feature <<'GHERKIN'
+Feature: Widgets
+  Scenario: adding a widget
+    Given a category called "Hardware"
+    When I add the widget "Cog" with 9 in stock
+    Then I should see "Cog" in the widget list
+
+  Scenario: spotting a widget that needs restocking
+    Given a category called "Hardware"
+    When I add the widget "Washer" with 2 in stock
+    Then the widget "Washer" should want restocking
+GHERKIN
+
+cat > features/step_definitions/widget_steps.rb <<'RUBY'
+Given("a category called {string}") do |name|
+  @category = Category.create!(name: name)
+end
+
+When("I add the widget {string} with {int} in stock") do |name, quantity|
+  visit new_widget_path
+  fill_in "Name", with: name
+  fill_in "Quantity", with: quantity.to_s
+  select @category.name, from: "Category"
+  click_on "Create Widget"
+end
+
+Then("I should see {string} in the widget list") do |name|
+  visit widgets_path
+  expect(page).to have_text(name)
+end
+
+Then("the widget {string} should want restocking") do |name|
+  expect(Widget.find_by!(name: name)).to be_restock
+end
+RUBY
+
+# ---------- minitest ----------
+cat > test/fixtures/categories.yml <<'YAML'
+hardware:
+  name: Hardware
+YAML
+
+cat > test/fixtures/widgets.yml <<'YAML'
+bracket:
+  name: Bracket
+  quantity: 10
+  available: true
+  category: hardware
+
+grommet:
+  name: Grommet
+  quantity: 3
+  available: false
+  category: hardware
+YAML
+
+cat > test/models/widget_test.rb <<'RUBY'
+require "test_helper"
+
+class WidgetTest < ActiveSupport::TestCase
+  test "loads the relocated fixtures" do
+    assert_equal "Bracket", widgets(:bracket).name
+  end
+
+  test "knows what needs restocking" do
+    assert widgets(:grommet).restock?
+    assert_not widgets(:bracket).restock?
+  end
+
+  test "requires a name" do
+    assert_not Widget.new(quantity: 1, category: categories(:hardware)).valid?
+  end
+end
+RUBY
+
+cat > test/controllers/widgets_controller_test.rb <<'RUBY'
+require "test_helper"
+
+class WidgetsControllerTest < ActionDispatch::IntegrationTest
+  test "index" do
+    get widgets_url
+    assert_response :success
+    assert_match widgets(:bracket).name, response.body
+  end
+
+  test "create" do
+    assert_difference "Widget.count", 1 do
+      post widgets_url, params: {
+        widget: { name: "Shim", quantity: 4, available: true, category_id: categories(:hardware).id }
+      }
+    end
+  end
+end
+RUBY
+
+# ---------- the legacy test/unit location ----------
+cat > test/unit/restock_level_test.rb <<'RUBY'
+require "test_helper"
+
+# Lives in test/unit on purpose: it is the directory oubliette treats as the
+# legacy Test::Unit home, and it should keep running from wherever it lands.
+class RestockLevelTest < ActiveSupport::TestCase
+  test "counts the stock across every widget" do
+    assert_equal 13, Widget.sum(:quantity)
+  end
+end
+RUBY
+
+# ---------- jest ----------
+cat > spec/javascript/restock.test.js <<'JS'
+// Anchored to the project root rather than to this file. Oubliette repairs
+// ruby's require_relative when a directory changes depth, but not javascript's
+// require, and spec/javascript -> test/javascript/jest is one level deeper.
+const path = require("path");
+const { restockLevel, totalQuantity } = require(path.join(process.cwd(), "app/javascript/restock"));
+
+describe("restockLevel", () => {
+  test("is out at zero", () => expect(restockLevel(0, 5)).toBe("out"));
+  test("is low below the threshold", () => expect(restockLevel(4, 5)).toBe("low"));
+  test("is ok at the threshold", () => expect(restockLevel(5, 5)).toBe("ok"));
+  test("is unknown for nonsense", () => expect(restockLevel("nine", 5)).toBe("unknown"));
+});
+
+describe("totalQuantity", () => {
+  test("adds the quantities up", () => {
+    expect(totalQuantity([{ quantity: 3 }, { quantity: 4 }, {}])).toBe(7);
+  });
+});
+JS
+
+# ---------- simplecov, so coverage/ exists ----------
+ruby -e '
+  path = "spec/spec_helper.rb"
+  body = File.read(path)
+  File.write(path, %(require "simplecov"\nSimpleCov.start "rails" do\n  enable_coverage :branch\nend\n\n) + body)
+'
+
+echo "run 'bin/verify' to see every suite pass" > test_results/README.txt
+
+# ---------- one command to run everything ----------
+cat > bin/verify <<'VERIFY'
+#!/usr/bin/env bash
+# Runs every suite this application has. Break something, then run it again.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+failed=0
+run() {
+  echo
+  echo "----- $1 -----"
+  shift
+  if "$@"; then echo "PASS"; else echo "FAIL"; failed=1; fi
+}
+
+run "rspec"    bundle exec rspec
+run "cucumber" bundle exec cucumber --format progress
+run "minitest" bin/rails test
+# npm test, not a hardcoded path: oubliette rewrites the script in package.json,
+# so this keeps working after the javascript directory moves.
+run "jest"     npm test --silent
+
+echo
+if [ "$failed" -eq 0 ]; then echo "everything green"; else echo "something failed"; exit 1; fi
+VERIFY
+chmod +x bin/verify
+
+echo "==> npm install"
+npm install --silent --no-audit --no-fund
+
+# SimpleCov writes coverage/ on every run and Rails does not ignore it. Left
+# untracked it would block `rake oubliette`, which refuses to move anything while
+# the tree has work git has not been told about. The trailing slash matches the
+# directory wherever it ends up, including test/results/coverage after a move.
+cat >> .gitignore <<'IGNORE'
+
+coverage/
+node_modules/
+IGNORE
+
+git add -A
+git -c user.email=playground@example.com -c user.name=playground commit -qm "Playground before oubliette"
+
+echo "==> verifying every suite is green"
+bin/verify
+
+echo
+echo "==> and again, because a suite that only passes on a fresh database is a trap"
+bin/verify
+
+echo
+echo "==> ready at $APP -- green, and oubliette is NOT installed yet"
+echo
+echo "    bin/verify                             every suite, before anything moves"
+echo
+echo "  to demo the install:"
+echo "    uncomment the oubliette line in Gemfile"
+echo "    bundle install"
+echo "    git commit -am 'install oubliette'   # it refuses to move a dirty tree"
+echo "    bundle exec rake oubliette:dry_run     see what it would do"
+echo "    bundle exec rake oubliette             do it"
+echo "    bin/verify                             every suite, after"
+echo "    bundle exec rake oubliette:rollback    put it all back"

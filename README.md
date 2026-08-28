@@ -105,9 +105,10 @@ look like test trees but belong to no known framework are listed under
 ```
 test/
 ├── rspec/            spec/
+│   └── system/       spec/system, spec/features
 ├── minitest/         test/models, test/controllers, ...
 ├── unit/             test/unit
-├── system/           spec/system, spec/features, test/system
+├── system/           test/system, Rails' own system tests
 ├── cucumber/
 │   ├── features/     features/
 │   └── aruba/
@@ -123,6 +124,11 @@ test/
 ├── support/          spec/support, test/support
 └── results/          test_results/, coverage/, screenshots
 ```
+
+RSpec's system specs are the one place the tree bends to a tool rather than the
+other way round. `rspec` collects from a single `--default-path`, so a system
+spec moved outside that path is quietly never run again; they stay under
+`test/rspec/system`. `test/system` belongs to Rails' own system tests.
 
 Assets that several frameworks share — factories, fixtures, attribute sets,
 seeds, cassettes and support helpers — are pulled out of whichever framework's
@@ -145,6 +151,16 @@ because RSpec was installed first.
 
 The file-based ones are backed up to `.oubliette/backups/` before they are
 touched, and rollback is a restore.
+
+## What it does not do
+
+Oubliette rewrites framework configuration and repairs ruby's `require_relative`
+when a directory changes depth. It does not rewrite application code, and it does
+not repair javascript's `require` or `import` -- a jest test that reaches its
+subject through `../../app/javascript/thing` will be one level out after the move.
+Anchor those to the project root, or fix them by hand; the stale-reference report
+will not catch them either, because a relative path does not name the directory
+that moved.
 
 ## When something is missing
 
@@ -183,5 +199,7 @@ migrates it, proves they still pass, and then rolls the whole thing back.
 ## Safety
 
 Oubliette refuses to move anything while the working tree has unstaged or
-untracked changes (`FORCE=1` overrides). Moves go through `git mv` where git
+untracked changes (`FORCE=1` overrides). Generated directories it knows about --
+`coverage/` above all -- should be in `.gitignore`, or the first SimpleCov run
+will block the next migration. Moves go through `git mv` where git
 will take them, so history follows the files.

@@ -89,9 +89,14 @@ module Oubliette
       {
         key: "capybara", label: "Capybara system tests", ecosystem: :ruby,
         gems: %w[capybara], paths: %w[spec/system spec/features test/system],
+        # RSpec's system specs stay inside the rspec tree. `rspec` collects from
+        # a single --default-path, so a system spec parked outside it is not
+        # found and not run -- and a suite that silently shrinks is worse than
+        # one that breaks. Rails' own system tests keep test/system, where
+        # `bin/rails test:system` looks for them.
         moves: {
-          "spec/system" => "test/system",
-          "spec/features" => "test/system",
+          "spec/system" => "test/rspec/system",
+          "spec/features" => "test/rspec/system",
           "test/system" => "test/system"
         },
         config: %i[capybara]

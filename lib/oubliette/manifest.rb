@@ -88,6 +88,17 @@ module Oubliette
       pairs(only: key).reject(&:missing?).map(&:oubliette).uniq
     end
 
+    # Where a framework's directories actually are, which is a different
+    # question from where migrate.yml wants them and the only one worth asking
+    # at runtime. After a rollback the answer is the origin, whatever target
+    # migrate.yml still names.
+    def location(key) = locations(key).first
+
+    def locations(key)
+      live = ledger.pairs(only: key).map(&:current).select { |path| @root.join(path).exist? }
+      live.any? ? live.uniq : destinations(key)
+    end
+
     # Throws hand-edited targets away and puts oubliette's own defaults back.
     def reset_targets!(only: nil)
       each_raw_pair(only: only) do |key, path|

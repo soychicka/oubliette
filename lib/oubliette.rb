@@ -13,14 +13,16 @@ module Oubliette
       @root ||= default_root
     end
 
-    # The relocated home of a framework's assets, for code that needs to build a
-    # path of its own. Falls back to the original location when oubliette has
-    # not run here.
+    # Where a framework's assets actually are, for code that needs to build a
+    # path of its own. This reads rollback.yml before migrate.yml on purpose: an
+    # application asking at runtime wants the directory that exists, not the one
+    # somebody has typed into the manifest but not yet applied. Returns nil when
+    # oubliette has never run here.
     def path(key)
       return nil unless Manifest.exists_in?(root)
 
-      destination = Manifest.load(root).destination(key)
-      destination && root.join(destination)
+      location = Manifest.load(root).location(key)
+      location && root.join(location)
     end
     private
       def default_root

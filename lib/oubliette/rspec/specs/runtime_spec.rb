@@ -22,3 +22,17 @@ RSpec.describe Oubliette::Runtime do
       .to raise_error(described_class::MissingPaths, /rspec-rails/)
   end
 end
+
+RSpec.describe "#{Oubliette::Runtime} rspec type mappings" do
+  it "names a type for every directory rspec-rails knows about" do
+    expect(Oubliette::Runtime::DIRECTORY_TYPES)
+      .to include("models" => :model, "requests" => :request, "system" => :system)
+  end
+
+  it "does nothing in a project that has no rspec-rails loaded" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+
+    expect { Oubliette::Runtime.configure(box.manifest) }.not_to raise_error
+  end
+end

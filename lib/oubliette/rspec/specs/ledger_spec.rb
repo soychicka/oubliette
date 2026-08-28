@@ -39,3 +39,27 @@ RSpec.describe Oubliette::Ledger do
     expect(described_class.load(box.root).pairs.map(&:origin)).to eq(%w[spec spec/factories])
   end
 end
+
+RSpec.describe "#{Oubliette}.path" do
+  it "answers with the relocated directory once it has moved" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+    Oubliette.root = box.root
+
+    expect(Oubliette.path("rspec-rails").to_s).to end_with("test/rspec")
+  ensure
+    Oubliette.root = nil
+  end
+
+  it "answers with the origin after a rollback, not the target migrate.yml still names" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+    box.runner.rollback
+    Oubliette.root = box.root
+
+    expect(Oubliette.path("rspec-rails").to_s).to end_with("/spec")
+    expect(box.read("migrate.yml")).to include("oubliette: test/rspec")
+  ensure
+    Oubliette.root = nil
+  end
+end

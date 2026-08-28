@@ -83,6 +83,25 @@ cat >> spec/rails_helper.rb <<'RUBY'
 
 support = Oubliette.path("support") || Rails.root.join("spec/support")
 Dir[File.join(support, "**", "*.rb")].sort.each { |file| require file }
+
+# rspec-rails infers an example's type from its directory. Oubliette has to keep
+# that working after the directory moves, so the suite depends on it here.
+RSpec.configure(&:infer_spec_type_from_file_location!)
+RUBY
+
+mkdir -p spec/requests
+cat > spec/requests/widgets_spec.rb <<'RUBY'
+require "rails_helper"
+
+# No `type: :request` on purpose -- if oubliette does not re-register the
+# directory mapping after the move, `get` is not defined here and this fails.
+RSpec.describe "widgets" do
+  it "is a request spec by virtue of the directory it lives in" do
+    get "/up"
+
+    expect(response).to have_http_status(:ok)
+  end
+end
 RUBY
 
 cat > spec/factories/widgets.rb <<'RUBY'
@@ -204,5 +223,10 @@ bundle exec rake oubliette:rollback
 test -d spec/models || { echo "rollback did not restore spec/"; exit 1; }
 test -d test/models || { echo "rollback did not restore test/models"; exit 1; }
 test -f rollback.yml || { echo "rollback.yml is missing"; exit 1; }
+
+echo "==> the suites still run once everything is back where it started"
+bundle exec rspec
+bundle exec cucumber --format progress
+bin/rails test
 
 echo "==> PASS"

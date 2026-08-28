@@ -32,13 +32,21 @@ RSpec.describe Oubliette::Runner do
     expect(box).to be_exist("test/data/fixtures")
     expect(box).to be_exist("test/data/cassettes")
     expect(box).to be_exist("test/support")
-    expect(box).to be_exist("test/system")
+    expect(box).to be_exist("test/rspec/system")
     expect(box).to be_exist("test/cucumber/features/step_definitions")
     expect(box).to be_exist("test/javascript/jest")
     expect(box).to be_exist("test/minitest/models")
     expect(box).to be_exist("test/unit")
     expect(box).to be_exist("test/results/reports")
     expect(box).to be_exist("test/results/coverage")
+  end
+
+  it "keeps rspec system specs inside the tree rspec collects from" do
+    box = new_sandbox(gems: %w[rspec-rails capybara], dirs: %w[spec/models spec/system])
+    box.run
+
+    expect(box).to be_exist("test/rspec/system")
+    expect(box.read(".rspec")).to include("--default-path test/rspec")
   end
 
   it "leaves no original location behind" do

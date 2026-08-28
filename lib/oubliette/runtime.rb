@@ -13,6 +13,15 @@ module Oubliette
 
     RUNTIME_KEYS = %w[fixtures factory_bot_rails capybara vcr simplecov results].freeze
 
+    # What rspec-rails would have inferred from the directory name, had the
+    # directory still been where it expects it.
+    DIRECTORY_TYPES = {
+      "models" => :model, "controllers" => :controller, "requests" => :request,
+      "routing" => :routing, "views" => :view, "helpers" => :helper,
+      "mailers" => :mailer, "jobs" => :job, "channels" => :channel,
+      "features" => :feature, "system" => :system
+    }.freeze
+
     class << self
       def apply!(root: Oubliette.root, strict: true)
         return :absent unless Manifest.exists_in?(root)
@@ -43,11 +52,12 @@ module Oubliette
       end
 
       def configure(manifest)
-        fixtures(manifest.destination("fixtures"))
-        factories(manifest.destinations("factory_bot_rails"))
-        cassettes(manifest.destination("vcr"))
-        coverage(manifest.destination("simplecov"))
-        screenshots(manifest.destinations("results").find { |path| path.end_with?("screenshots") })
+        rspec_types(manifest.location("rspec-rails"), manifest.location("capybara"))
+        fixtures(manifest.location("fixtures"))
+        factories(manifest.locations("factory_bot_rails"))
+        cassettes(manifest.location("vcr"))
+        coverage(manifest.location("simplecov"))
+        screenshots(manifest.locations("results").find { |path| path.end_with?("screenshots") })
       end
       private
         # rails/test_help appends "#{Rails.root}/test/fixtures/" from a hook of
@@ -55,6 +65,29 @@ module Oubliette
         # assigning fixture_paths here would simply be appended to. Overriding
         # the reader instead makes migrate.yml the answer no matter who asks or
         # when -- which is the point of migrate.yml.
+        # rspec-rails works out that a spec in spec/requests is a request spec by
+        # matching the literal path, so relocating the tree silently strips the
+        # type and the example loses `get`, `post` and the rest. The same
+        # mapping is re-registered against wherever the directories actually
+        # went. `||=` means an explicit `type:` on the example still wins.
+        def rspec_types(rspec_path, system_path)
+          return unless defined?(RSpec::Rails) && defined?(RSpec.configure)
+
+          mappings = DIRECTORY_TYPES.filter_map do |dir, type|
+            [ "#{rspec_path}/#{dir}", type ] if rspec_path
+          end
+          mappings << [ system_path, :system ] if system_path
+
+          RSpec.configure do |config|
+            mappings.each do |path, type|
+              pattern = %r{/#{Regexp.escape(path)}/}
+              config.define_derived_metadata(file_path: pattern) do |metadata|
+                metadata[:type] ||= type
+              end
+            end
+          end
+        end
+
         def fixtures(path)
           return if path.nil? || !defined?(ActiveSupport::TestCase)
 
