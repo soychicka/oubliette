@@ -3,24 +3,21 @@
 require "yaml"
 require "pathname"
 require_relative "detector"
+require_relative "ledger"
+require_relative "pair"
 
 module Oubliette
-  # migrate.yml, in object form. The file on disk is the single source of truth
-  # for both the move and the runtime configuration, so everything here is
-  # careful to preserve whatever the user typed into it by hand: a sync adds
-  # newly detected frameworks and refreshes evidence, and touches nothing else.
+  # migrate.yml: where you want each framework's directories to live.
+  #
+  # This is the file you edit. It says nothing about where anything came from or
+  # where anything currently is -- that is rollback.yml's job -- so retargeting a
+  # directory here can never cost the project the ability to put it back.
   class Manifest
     FILENAME = "migrate.yml"
     VERSION = 1
 
-    Move = Data.define(:gem, :from, :to, :applied, :status) do
-      def moved? = status == "moved"
-      def missing? = status == "missing"
-      def canonical? = from == to
-      def current = applied || from
-    end
-
     attr_reader :root, :path, :data
+    attr_writer :ledger
 
     def self.path_in(root) = Pathname.new(root).join(FILENAME)
 
@@ -33,12 +30,9 @@ module Oubliette
       new(root, YAML.safe_load(file.read, aliases: false) || {})
     end
 
-    # Builds a manifest from detection, merging over an existing file when one
-    # is present so hand-edited targets survive a sync.
     def self.build(root)
-      existing = exists_in?(root) ? load(root) : new(root, {})
-      existing.sync!
-      existing
+      manifest = exists_in?(root) ? load(root) : new(root, {})
+      manifest.sync!
     end
 
     def initialize(root, data)
@@ -51,13 +45,14 @@ module Oubliette
       @data["strays"] ||= {}
     end
 
+    def ledger
+      @ledger ||= Ledger.load(@root)
+    end
+
     def sync!
       detector = Detector.new(@root)
-      detections = detector.detections
-
-      detections.each { |detection| merge_detection(detection) }
+      detector.detections.each { |detection| merge_detection(detection) }
       merge_strays(detector.strays(claimed_top_levels))
-      refresh_statuses!
       self
     end
 
@@ -69,54 +64,37 @@ module Oubliette
       Array(@data["gems"].dig(key, "config")).map(&:to_sym)
     end
 
-    # Every move, deepest source first, so a nested directory is extracted
-    # before its parent is relocated out from under it.
-    def moves(only: nil)
+    # Deepest origin first, so a nested directory is extracted before its parent
+    # is relocated out from under it.
+    def pairs(only: nil)
       @data["gems"].flat_map do |key, gem|
         next [] unless gem["enabled"]
         next [] if only && key != only
 
-        Array(gem["paths"]).map do |entry|
-          Move.new(
-            gem: key,
-            from: entry["from"],
-            to: entry["to"],
-            applied: entry["applied"],
-            status: entry["status"]
-          )
-        end
-      end.sort_by { |move| [ -move.from.count("/"), move.from ] }
+        Array(gem["paths"]).map { |path| pair_for(key, path) }
+      end.sort_by { |pair| [ -pair.origin.count("/"), pair.origin ] }
     end
 
-    def record!(move, applied:, status:)
-      entry = raw_entry(move.gem, move.from)
-      entry["applied"] = applied
-      entry["status"] = status
-      self
-    end
+    def missing = pairs.select(&:missing?)
 
-    def refresh_statuses!
-      @data["gems"].each_value do |gem|
-        Array(gem["paths"]).each do |entry|
-          entry["status"] = status_for(entry)
-        end
-      end
-      self
-    end
+    def pending = pairs.select(&:pending?)
 
-    def missing
-      moves.select(&:missing?)
-    end
-
-    # Where a framework's assets live once oubliette is done with them. Returns
-    # nil when every one of its paths is missing, which is the signal for the
+    # Where a framework's assets are meant to live. nil when every one of its
+    # directories is missing from both locations, which is the signal for the
     # config writers to disable themselves rather than point at nothing.
-    def destination(key)
-      destinations(key).first
-    end
+    def destination(key) = destinations(key).first
 
     def destinations(key)
-      moves(only: key).reject(&:missing?).map { |move| move.applied || move.to }.uniq
+      pairs(only: key).reject(&:missing?).map(&:oublietted).uniq
+    end
+
+    # Throws hand-edited targets away and puts oubliette's own defaults back.
+    def reset_targets!(only: nil)
+      each_raw_pair(only: only) do |key, path|
+        default = default_target(key, path["origin"])
+        path["oublietted"] = default if default
+      end
+      self
     end
 
     def save!
@@ -125,70 +103,81 @@ module Oubliette
     end
 
     def render
-      header = <<~YAML
-        # migrate.yml -- oubliette's source of truth.
+      <<~YAML + @data.to_yaml.sub(/\A---\n/, "")
+        # migrate.yml -- where you want each framework's directories to live.
         #
-        # Edit `to:` to send a directory somewhere else, flip `enabled:` to skip a
-        # framework, then rerun `rake oubliette`. A target that changes after a move
-        # is returned to its original location first, then relocated, so the config
-        # only ever describes one hop.
+        # Edit `oublietted:` to send a directory somewhere else, flip `enabled:`
+        # to skip a framework, then rerun `rake oubliette`. Only the entries that
+        # differ from rollback.yml are touched, so a rerun is cheap.
         #
-        #   status: pending   not moved yet
-        #           moved     living at `applied`
-        #           missing   absent from both `from` and `to` -- config is disabled
-        #           canonical from and to are the same, nothing to do
+        #   rake oubliette              move whatever changed here
+        #   rake oubliette:reset        put oubliette's own targets back, and move
+        #   rake oubliette:rollback     return everything to its `origin`
       YAML
-      header + @data.to_yaml.sub(/\A---\n/, "")
     end
     private
+      def pair_for(key, path)
+        origin = path["origin"]
+        oublietted = path["oublietted"]
+        current = ledger.current(key, origin) || origin
+
+        Pair.new(
+          gem: key,
+          origin: origin,
+          oublietted: oublietted,
+          current: current,
+          status: status_for(origin, oublietted, current)
+        )
+      end
+
+      def status_for(origin, oublietted, current)
+        return :canonical if origin == oublietted
+        return @root.join(oublietted).exist? ? :settled : :missing if current == oublietted
+        return :pending if @root.join(current).exist?
+        return :settled if @root.join(oublietted).exist?
+
+        :missing
+      end
+
       def merge_detection(detection)
         gem = (@data["gems"][detection.key] ||= {
-          "label" => detection.label,
-          "ecosystem" => detection.ecosystem.to_s,
           "enabled" => true,
           "config" => detection.config.map(&:to_s),
           "paths" => []
         })
-        gem["evidence"] |= detection.evidence
 
-        detection.moves.each do |from, to|
-          next if gem["paths"].any? { |entry| entry["from"] == from }
-          next unless relevant?(from, to)
+        detection.moves.each do |origin, oublietted|
+          next if Array(gem["paths"]).any? { |path| path["origin"] == origin }
+          next unless relevant?(detection.key, origin)
 
-          gem["paths"] << { "from" => from, "to" => to, "applied" => nil, "status" => "pending" }
+          gem["paths"] << { "origin" => origin, "oublietted" => oublietted }
         end
       end
 
-      # A catalog default only earns a line in migrate.yml if it has something to
-      # describe: the source exists, or the move has already happened.
-      #
-      # The nesting guard matters on a sync. test/javascript is jest's default
-      # home and test/javascript/jest is where it ends up, so once the move has
-      # happened the parent exists again and the same rule would otherwise
-      # propose folding it into its own child, forever.
-      def relevant?(from, to)
-        return false if to.start_with?("#{from}/") && @root.join(to).exist?
-        return false if recorded_targets.include?(from)
+      # A catalog default earns a line only when the directory is really there
+      # and oubliette has not already dealt with it. The second guard is what
+      # makes a sync idempotent: a destination oubliette has filled is not a
+      # source for anything. Without it, spec/support having become test/support
+      # would have the catalog propose test/support -> test/support on the next
+      # run, and test/javascript -> test/javascript/jest would fold jest into
+      # its own child, forever.
+      def relevant?(key, origin)
+        return false if ledger.current(key, origin)
+        return false if ledger.pairs.any? { |pair|
+          pair.current == origin || pair.current.to_s.start_with?("#{origin}/")
+        }
 
-        @root.join(from).exist?
-      end
-
-      # A destination oubliette already filled is not a source for anything.
-      # Without this a sync would keep proposing to fold test/support into
-      # test/support, and test/factories into test/data/factories, every time it
-      # ran after the first.
-      def recorded_targets
-        @data["gems"].values.flat_map { |gem| Array(gem["paths"]).map { |entry| entry["to"] } }.uniq
+        @root.join(origin).exist?
       end
 
       def merge_strays(names)
         names.each do |name|
-          next if @data["strays"].key?(name)
+          next if @data["strays"].key?(name) || @data["gems"].key?(name)
 
           @data["strays"][name] = {
             "enabled" => false,
-            "note" => "unclaimed test-shaped directory -- set enabled: true and edit `to:` to include it",
-            "paths" => [ { "from" => name, "to" => "#{@data['root']}/#{name}", "applied" => nil, "status" => "pending" } ]
+            "note" => "unclaimed test-shaped directory -- set enabled: true to include it",
+            "paths" => [ { "origin" => name, "oublietted" => "#{@data['root']}/#{name}" } ]
           }
         end
 
@@ -196,33 +185,26 @@ module Oubliette
           next unless stray["enabled"]
           next if @data["gems"].key?(name)
 
-          @data["gems"][name] = stray.merge("label" => name, "ecosystem" => "project", "config" => [])
+          @data["gems"][name] = stray.merge("config" => [])
         end
       end
 
       def claimed_top_levels
-        Catalog.entries.flat_map { |entry| entry[:moves].keys }.map { |path| path.split("/").first }.uniq
+        Catalog.entries.flat_map { |entry| entry[:moves].keys }
+                       .map { |path| path.split("/").first }.uniq
       end
 
-      def raw_entry(key, from)
-        Array(@data["gems"].dig(key, "paths")).find { |entry| entry["from"] == from } ||
-          raise(Error, "no path #{from.inspect} recorded for #{key}")
-      end
+      def each_raw_pair(only: nil)
+        @data["gems"].each do |key, gem|
+          next if only && key != only
 
-      def status_for(entry)
-        return "canonical" if entry["from"] == entry["to"]
-
-        current = entry["applied"]
-        return "moved" if current && @root.join(current).exist?
-
-        if @root.join(entry["to"]).exist? && !@root.join(entry["from"]).exist?
-          entry["applied"] ||= entry["to"]
-          return "moved"
+          Array(gem["paths"]).each { |path| yield key, path }
         end
+      end
 
-        return "pending" if @root.join(entry["from"]).exist?
-
-        "missing"
+      def default_target(key, origin)
+        Catalog.find(key)&.dig(:moves, origin) ||
+          @data["strays"].dig(key, "paths", 0, "oublietted")
       end
   end
 end

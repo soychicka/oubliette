@@ -4,10 +4,10 @@ module Oubliette
   # Renders what oubliette is about to do, or has just done, as a plain table.
   class Reporter
     STATUS_LABEL = {
-      "pending" => "move",
-      "moved" => "in place",
-      "missing" => "MISSING",
-      "canonical" => "already there"
+      pending: "move",
+      settled: "in place",
+      missing: "MISSING",
+      canonical: "already there"
     }.freeze
 
     def initialize(manifest, out: $stdout)
@@ -22,8 +22,6 @@ module Oubliette
       warnings
       self
     end
-
-    def line(text) = @out.puts(text)
     private
       def heading(text)
         @out.puts
@@ -32,19 +30,19 @@ module Oubliette
       end
 
       def gem_section(key)
-        moves = @manifest.moves(only: key)
-        return if moves.empty?
+        pairs = @manifest.pairs(only: key)
+        return if pairs.empty?
 
         @out.puts
         @out.puts("#{key} (#{@manifest.enabled?(key) ? 'enabled' : 'disabled'})")
-        moves.each do |move|
-          label = STATUS_LABEL.fetch(move.status, move.status)
-          @out.puts(format("  %-14s %s -> %s", label, move.from, move.to))
+        pairs.each do |pair|
+          label = STATUS_LABEL.fetch(pair.status, pair.status.to_s)
+          @out.puts(format("  %-14s %s -> %s", label, pair.origin, pair.oublietted))
         end
       end
 
       def strays
-        pending = @manifest.data["strays"].reject { |_, stray| stray["enabled"] }
+        pending = @manifest.data["strays"].reject { |_name, stray| stray["enabled"] }
         return if pending.empty?
 
         @out.puts
@@ -58,7 +56,7 @@ module Oubliette
 
         @out.puts
         @out.puts("WARNING: missing from both locations -- config will be disabled")
-        missing.each { |move| @out.puts("  #{move.gem}: #{move.from} (expected at #{move.to})") }
+        missing.each { |pair| @out.puts("  #{pair.gem}: #{pair.origin} (expected at #{pair.oublietted})") }
       end
   end
 end

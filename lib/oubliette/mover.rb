@@ -4,6 +4,7 @@ require "fileutils"
 require "open3"
 require "pathname"
 require_relative "manifest"
+require_relative "ledger"
 require_relative "config/writer"
 require_relative "requires"
 
@@ -98,7 +99,9 @@ module Oubliette
 
     # migrate.yml and the config backups are oubliette's own working files, so
     # their being uncommitted is never a reason to refuse to run.
-    OWNED = [ Manifest::FILENAME, Config::Writer::BACKUP_DIR.split("/").first ].freeze
+    OWNED = [
+      Manifest::FILENAME, Ledger::FILENAME, Config::Writer::BACKUP_DIR.split("/").first
+    ].freeze
 
     # Kept public because the runner stages the config files it rewrites, which
     # is what lets a second run see a tree it still considers stable.

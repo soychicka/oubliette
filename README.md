@@ -21,11 +21,12 @@ end
 
 ```bash
 rake oubliette:prepare   # write migrate.yml so you can edit the targets first
-rake oubliette           # move everything, and sync frameworks added since
+rake oubliette           # move whatever changed, and sync frameworks added since
 rake oubliette:dry_run   # show what would change, touch nothing
 rake oubliette:status    # report where every test directory currently lives
-rake oubliette:rollback  # put it all back
-rake oubliette:rollback[cucumber-rails]   # put one framework back
+rake oubliette:reset     # discard your edits, restore oubliette's targets, move to match
+rake oubliette:rollback  # return everything to its origin
+rake oubliette:put_back[cucumber-rails]   # return one framework
 rake oubliette:selftest  # run the gem's own specs, with no app code loaded
 rake oubliette:install_specs   # add the layout spec to this project's suite
 ```
@@ -35,30 +36,69 @@ rake oubliette:install_specs   # add the layout spec to this project's suite
 The same commands exist as a CLI for non-Rails projects: `oubliette prepare`,
 `oubliette run`, `oubliette status`, `oubliette rollback [gem]`.
 
-## migrate.yml is the source of truth
+## Two files
 
-`rake oubliette:prepare` writes it; nothing else is consulted, at migration time
-or at runtime. If you never run `prepare`, the first `rake oubliette` generates
-it, uses it, and tells you that you can edit it and rerun.
+**migrate.yml is yours.** It says where you want each framework's directories to
+live, and nothing else. `rake oubliette:prepare` writes it; if you never run
+`prepare`, the first `rake oubliette` generates it, uses it, and tells you that
+you can edit it and rerun.
 
 ```yaml
 gems:
   rspec-rails:
-    label: RSpec
     enabled: true
     config: [rspec]
     paths:
-    - from: spec
-      to: test/rspec
-      applied: test/rspec
-      status: moved
+    - origin: spec
+      oublietted: test/rspec
+  factory_bot_rails:
+    enabled: true
+    config: [factory_bot]
+    paths:
+    - origin: spec/factories
+      oublietted: test/data/factories
+    - origin: test/factories
+      oublietted: test/data/factories
 ```
 
-Change a `to:` and rerun `rake oubliette`: the directory is returned to its
-original location first, then moved to the new one, so the configuration only
-ever has to describe a single hop. Set `enabled: false` to leave a framework
-alone. Directories that look like test trees but belong to no known framework
-are listed under `strays:`, disabled, so including one is a deliberate edit.
+**rollback.yml is oubliette's.** It records the same pairs, but `oublietted` is
+where each directory *actually is*, and `origin` is the framework's own default
+location, written once and never rewritten.
+
+```yaml
+gems:
+  rspec-rails:
+    paths:
+    - origin: spec
+      oublietted: test/examples
+```
+
+The split is the point. You can retarget a directory in migrate.yml as often as
+you like, or delete the file, or mangle it — `rake oubliette:rollback` still
+knows that `spec` is where RSpec expects its specs, because that answer was
+never stored in the file you edit.
+
+## What each command does with them
+
+`rake oubliette` compares the two files pair by pair and **only touches entries
+that differ**. A pair whose `oublietted` already matches rollback.yml is skipped
+entirely, which is why the same command serves as the first migration, the sync
+after installing a new framework, and the way you apply an edit. A directory
+whose target changed goes back to its `origin` first and is then moved to the
+new target, so the configuration only ever describes a single hop.
+
+`rake oubliette:reset` overwrites the targets in migrate.yml with oubliette's own
+defaults, discarding your edits, and then moves the directories to match.
+`rake oubliette:reset[rspec-rails]` resets one framework and leaves the rest of
+your edits alone.
+
+`rake oubliette:rollback` — and `rake oubliette:put_back`, which is the same
+thing — reads rollback.yml and returns every directory to its `origin`. Both
+take a framework name to scope them: `rake oubliette:put_back[cucumber-rails]`.
+
+Set `enabled: false` on a gem in migrate.yml to leave it alone. Directories that
+look like test trees but belong to no known framework are listed under
+`strays:`, disabled, so including one is a deliberate edit.
 
 ## Layout
 

@@ -28,8 +28,8 @@ module Oubliette
       # loads no fixtures.
       def verify!(manifest)
         broken = manifest.gems.select do |key|
-          moves = manifest.moves(only: key)
-          moves.any? && moves.all?(&:missing?)
+          pairs = manifest.pairs(only: key)
+          pairs.any? && pairs.all?(&:missing?)
         end
         return if broken.empty?
 

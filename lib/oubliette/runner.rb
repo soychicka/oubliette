@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "ledger"
 require_relative "manifest"
 require_relative "mover"
 require_relative "reporter"
@@ -10,11 +11,12 @@ require_relative "config/cucumber_env"
 require_relative "config/javascript"
 
 module Oubliette
-  # Orchestrates the whole job: detect, describe, move, rewrite, record.
+  # Detect, describe, move, rewrite, record.
   #
-  # `call` is deliberately the only verb that changes anything, and it is
-  # idempotent -- running it twice moves nothing the second time, which is what
-  # makes it double as the sync for frameworks added later.
+  # `call` is the only verb that changes anything, and it moves nothing that
+  # migrate.yml and rollback.yml already agree about -- which is what lets the
+  # same command serve as the first migration, the sync after installing a new
+  # framework, and the way you apply an edit.
   class Runner
     def initialize(root, dry_run: false, out: $stdout, force: false)
       @root = Pathname.new(root)
@@ -24,13 +26,13 @@ module Oubliette
       @log = ->(line) { @out.puts(line) }
     end
 
-    # Writes migrate.yml and stops, so the user can edit targets before any
+    # Writes migrate.yml and stops, so the targets can be edited before any
     # directory moves.
     def prepare
       manifest = Manifest.build(@root)
       manifest.save! unless @dry_run
-      Reporter.new(manifest, out: @out).plan(dry_run: @dry_run)
-      instructions(manifest, prepared: true)
+      report(manifest)
+      instructions(manifest)
       manifest
     end
 
@@ -41,53 +43,81 @@ module Oubliette
       manifest.save! unless @dry_run
 
       mover = Mover.new(@root, dry_run: @dry_run, logger: @log)
-
-      @out.puts
-      @out.puts(@dry_run ? "would move" : "moving")
-      manifest.moves.each do |move|
-        result = mover.apply(move)
-        next if %i[canonical unchanged missing].include?(result)
-
-        manifest.record!(move, applied: move.to, status: "moved") unless @dry_run
-      end
-
-      manifest.refresh_statuses!
+      move(manifest, mover)
       write_configs(manifest)
       stage_configs(mover, manifest)
-      manifest.save! unless @dry_run
-
+      report(manifest)
       report_stale_references(manifest)
-      Reporter.new(manifest, out: @out).plan(dry_run: @dry_run)
-      instructions(manifest, prepared: fresh)
+      instructions(manifest) if fresh
       manifest
     end
 
+    # Puts migrate.yml's targets back to oubliette's own defaults, discarding
+    # hand edits, and then moves the directories to match.
+    def reset(key = nil)
+      manifest = Manifest.build(@root)
+      manifest.reset_targets!(only: key)
+      manifest.save! unless @dry_run
+      @out.puts("reset #{key || 'every framework'} to oubliette's default targets")
+      call
+    end
+
+    # Returns directories to their `origin` -- the framework's own default
+    # location, as recorded in rollback.yml when they were first moved. What
+    # migrate.yml says is irrelevant here, deliberately.
     def rollback(key = nil)
-      manifest = Manifest.load(@root)
       ensure_movable!
+      manifest = Manifest.exists_in?(@root) ? Manifest.load(@root) : Manifest.new(@root, {})
+      ledger = Ledger.load(@root)
       mover = Mover.new(@root, dry_run: @dry_run, logger: @log)
 
       @out.puts(@dry_run ? "would roll back" : "rolling back")
       restore_configs(manifest, key)
 
-      manifest.moves(only: key).reverse_each do |move|
-        next if mover.revert(move) == :unchanged && !@dry_run
+      ledger.pairs(only: key).each do |pair|
+        next if pair.current == pair.origin
 
-        manifest.record!(move, applied: nil, status: "pending") unless @dry_run
+        if @root.join(pair.current).exist?
+          mover.relocate(pair.current, pair.origin)
+          ledger.record!(pair.gem, pair.origin, pair.origin) unless @dry_run
+        else
+          @out.puts("  #{pair.gem}: #{pair.current} is gone, cannot restore #{pair.origin}")
+        end
       end
 
       stage_configs(mover, manifest)
-      manifest.refresh_statuses!
-      manifest.save! unless @dry_run
-      manifest
+      ledger.save! unless @dry_run
+      ledger
     end
+    alias put_back rollback
 
     def status
-      manifest = Manifest.exists_in?(@root) ? Manifest.load(@root).refresh_statuses! : Manifest.build(@root)
-      Reporter.new(manifest, out: @out).plan(dry_run: true)
+      manifest = Manifest.exists_in?(@root) ? Manifest.load(@root) : Manifest.build(@root)
+      report(manifest)
       manifest
     end
     private
+      def move(manifest, mover)
+        ledger = manifest.ledger
+        work = manifest.pairs.reject { |pair| pair.settled? || pair.canonical? }
+
+        @out.puts
+        @out.puts(@dry_run ? "would move" : "moving")
+        @out.puts("  nothing -- migrate.yml and rollback.yml already agree") if work.empty?
+
+        work.each do |pair|
+          if pair.missing?
+            @out.puts("  #{pair.gem}: #{pair.origin} is missing from both locations, skipped")
+            next
+          end
+
+          pair.hops.each { |from, to| mover.relocate(from, to) }
+          ledger.record!(pair.gem, pair.origin, pair.oublietted) unless @dry_run
+        end
+
+        ledger.save! unless @dry_run
+      end
+
       def ensure_movable!
         return if @dry_run || @force
 
@@ -102,19 +132,6 @@ module Oubliette
         TEXT
       end
 
-      # Config files are rewritten, not moved, so they need staging of their own
-      # for the tree to still look settled on the next run.
-      def stage_configs(mover, manifest)
-        return if @dry_run
-
-        @manifest_for_staging = manifest
-
-        names = Config::Writer.registry.keys.filter_map do |name|
-          Config::Writer.build(name, @root, @manifest_for_staging, dry_run: true, logger: ->(_) { })&.filename
-        end
-        mover.stage(*names.uniq.select { |name| @root.join(name).exist? })
-      end
-
       def write_configs(manifest)
         names = manifest.gems.select { |key| manifest.enabled?(key) }
                              .flat_map { |key| manifest.config_writers(key) }
@@ -124,22 +141,30 @@ module Oubliette
         @out.puts
         @out.puts(@dry_run ? "would rewrite config" : "rewriting config")
         names.each do |name|
-          writer = Config::Writer.build(name, @root, manifest, dry_run: @dry_run, logger: @log)
-          writer&.apply
+          Config::Writer.build(name, @root, manifest, dry_run: @dry_run, logger: @log)&.apply
         end
       end
 
       def restore_configs(manifest, key)
-        names = if key
-          manifest.config_writers(key)
-        else
-          Config::Writer.registry.keys
-        end
-
+        names = key ? manifest.config_writers(key) : Config::Writer.registry.keys
         names.each do |name|
-          writer = Config::Writer.build(name, @root, manifest, dry_run: @dry_run, logger: @log)
-          writer&.revert
+          Config::Writer.build(name, @root, manifest, dry_run: @dry_run, logger: @log)&.revert
         end
+      end
+
+      # Config files are rewritten, not moved, so they need staging of their own
+      # for the tree to still look settled on the next run.
+      def stage_configs(mover, manifest)
+        return if @dry_run
+
+        names = Config::Writer.registry.keys.filter_map do |name|
+          Config::Writer.build(name, @root, manifest, dry_run: true, logger: ->(_line) { })&.filename
+        end
+        mover.stage(*names.uniq.select { |name| @root.join(name).exist? })
+      end
+
+      def report(manifest)
+        Reporter.new(manifest, out: @out).plan(dry_run: @dry_run)
       end
 
       # Oubliette rewrites framework config, never application code, so anything
@@ -157,19 +182,19 @@ module Oubliette
         @out.puts("  ... and #{findings.length - 40} more") if findings.length > 40
       end
 
-      def instructions(manifest, prepared:)
-        return unless prepared
-
+      def instructions(manifest)
         @out.puts
         @out.puts <<~TEXT
           Wrote #{manifest.path.basename}. You can edit this file and rerun `rake oubliette`
-          to use your newly specified locations -- a directory whose target changed is
-          returned to its original path first, then moved to the new one.
+          to use your newly specified locations -- only the entries that differ from
+          #{Ledger::FILENAME} are touched, and a directory whose target changed is returned
+          to its origin first, then moved to the new one.
 
-            rake oubliette                 move and sync
-            rake oubliette:dry_run         show what would change
-            rake oubliette:rollback        undo everything
-            rake oubliette:rollback[rspec-rails]   undo one framework
+            rake oubliette                          move what changed
+            rake oubliette:dry_run                  show what would change
+            rake oubliette:reset                    restore oubliette's own targets, and move
+            rake oubliette:rollback                 return everything to its origin
+            rake oubliette:put_back[rspec-rails]    return one framework
         TEXT
       end
   end

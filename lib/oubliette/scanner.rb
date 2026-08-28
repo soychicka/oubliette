@@ -20,7 +20,7 @@ module Oubliette
     end
 
     def findings
-      olds = @manifest.moves.reject(&:canonical?).map(&:from).uniq
+      olds = @manifest.pairs.reject(&:canonical?).map(&:origin).uniq
       return [] if olds.empty?
 
       pattern = Regexp.union(olds.flat_map { |old| patterns_for(old) })
@@ -47,7 +47,7 @@ module Oubliette
 
       def skipped?(path)
         relative = path.relative_path_from(@root).to_s
-        return true if relative == Manifest::FILENAME
+        return true if [ Manifest::FILENAME, Ledger::FILENAME ].include?(relative)
 
         SKIP.any? { |dir| relative == dir || relative.start_with?("#{dir}/") }
       end

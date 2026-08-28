@@ -18,7 +18,7 @@ RSpec.describe Oubliette::Runtime do
     box.run
     FileUtils.remove_entry(box.root.join("test/rspec"))
 
-    expect { described_class.verify!(box.manifest.refresh_statuses!) }
+    expect { described_class.verify!(box.manifest) }
       .to raise_error(described_class::MissingPaths, /rspec-rails/)
   end
 end

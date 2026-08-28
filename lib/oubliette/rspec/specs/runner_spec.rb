@@ -66,7 +66,7 @@ RSpec.describe Oubliette::Runner do
     box.run
 
     expect(box.read("migrate.yml")).to eq(before)
-    expect(box.manifest.moves.map(&:status).uniq).to contain_exactly("moved", "canonical")
+    expect(box.manifest.pairs.map(&:status).uniq).to contain_exactly(:settled, :canonical)
     expect(box).to be_exist("test/rspec/models")
     expect(box).not_to be_exist("test/rspec/rspec")
     expect(box).not_to be_exist("test/javascript/jest/jest")
@@ -88,7 +88,7 @@ RSpec.describe Oubliette::Runner do
   it "sends a directory home before sending it somewhere new" do
     box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("to: test/rspec", "to: test/examples"))
+    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/rspec", "oublietted: test/examples"))
     box.run
 
     expect(box).to be_exist("test/examples/models")
@@ -146,6 +146,80 @@ RSpec.describe Oubliette::Runner do
     box.run
 
     expect(box.log).to include("MISSING")
-    expect(box.manifest.missing.map(&:from)).to eq(%w[features])
+    expect(box.manifest.missing.map(&:origin)).to eq(%w[features])
+  end
+
+  it "skips a directory migrate.yml and rollback.yml already agree about" do
+    box = new_sandbox(gems: %w[rspec-rails cucumber-rails], dirs: %w[spec/models features/support])
+    box.run
+    box.commit("migrated")
+    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/rspec", "oublietted: test/examples"))
+    box.run
+
+    relocations = box.log.lines.map(&:chomp).count("  features -> test/cucumber/features")
+    expect(relocations).to eq(1)
+    expect(box).to be_exist("test/cucumber/features/support")
+    expect(box).to be_exist("test/examples/models")
+  end
+
+  it "restores the original location even after migrate.yml has been retargeted twice" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/rspec", "oublietted: test/examples"))
+    box.run
+    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/examples", "oublietted: test/somewhere"))
+    box.run
+    box.runner.rollback
+
+    expect(box).to be_exist("spec/models")
+    expect(box).not_to be_exist("test/somewhere")
+  end
+
+  it "rolls back to the origin even when migrate.yml is gibberish" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+    box.write("migrate.yml", "version: 1\ngems: {}\nstrays: {}\n")
+    box.commit("mangled the manifest")
+    box.runner.rollback
+
+    expect(box).to be_exist("spec/models")
+    expect(box).not_to be_exist("test/rspec")
+  end
+
+  it "answers to put_back as well as rollback" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+    box.runner.put_back("rspec-rails")
+
+    expect(box).to be_exist("spec/models")
+  end
+
+  it "puts oubliette's own targets back on reset, and moves to match" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/rspec", "oublietted: test/examples"))
+    box.run
+    box.commit("retargeted")
+    box.runner.reset
+
+    expect(box).to be_exist("test/rspec/models")
+    expect(box).not_to be_exist("test/examples")
+    expect(box.read("migrate.yml")).to include("oublietted: test/rspec")
+    expect(box.read(".rspec")).to include("--default-path test/rspec")
+  end
+
+  it "resets one framework and leaves another framework's edit in place" do
+    box = new_sandbox(gems: %w[rspec-rails cucumber-rails], dirs: %w[spec/models features/support])
+    box.run
+    edited = box.read("migrate.yml")
+      .sub("oublietted: test/rspec", "oublietted: test/examples")
+      .sub("oublietted: test/cucumber/features", "oublietted: test/gherkin")
+    box.write("migrate.yml", edited)
+    box.run
+    box.commit("retargeted both")
+    box.runner.reset("rspec-rails")
+
+    expect(box).to be_exist("test/rspec/models")
+    expect(box).to be_exist("test/gherkin/support")
   end
 end

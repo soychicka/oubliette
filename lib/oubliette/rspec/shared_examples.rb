@@ -13,26 +13,38 @@ require "yaml"
 #   end
 RSpec.shared_examples "an oubliette-managed project" do |project_root|
   let(:root) { Pathname.new(project_root) }
-  let(:manifest) { Oubliette::Manifest.load(root).refresh_statuses! }
+  let(:manifest) { Oubliette::Manifest.load(root) }
 
   it "has a migrate.yml describing the layout" do
     expect(Oubliette::Manifest.exists_in?(root)).to be(true),
       "expected #{root}/migrate.yml -- run `rake oubliette:prepare`"
   end
 
-  it "has moved every directory it claims to manage" do
-    pending_moves = manifest.moves.select { |move| move.status == "pending" }
+  it "has a rollback.yml recording where everything came from" do
+    expect(Oubliette::Ledger.exists_in?(root)).to be(true),
+      "expected #{root}/rollback.yml -- run `rake oubliette`"
+  end
 
-    expect(pending_moves).to be_empty,
-      "still at their original paths: #{pending_moves.map(&:from).join(', ')} -- run `rake oubliette`"
+  it "can name an origin for every directory it has moved" do
+    ledger = Oubliette::Ledger.load(root)
+    unrecorded = manifest.pairs.reject(&:canonical?).reject { |pair| ledger.current(pair.gem, pair.origin) }
+
+    expect(unrecorded.map(&:origin)).to be_empty
+  end
+
+  it "has moved every directory it claims to manage" do
+    unmoved = manifest.pending
+
+    expect(unmoved).to be_empty,
+      "still at their original paths: #{unmoved.map(&:origin).join(', ')} -- run `rake oubliette`"
   end
 
   it "has no directory missing from both its old and new location" do
-    expect(manifest.missing.map { |move| "#{move.gem}:#{move.from}" }).to be_empty
+    expect(manifest.missing.map { |pair| "#{pair.gem}:#{pair.origin}" }).to be_empty
   end
 
   it "points every recorded destination at a directory that exists" do
-    absent = manifest.moves.reject(&:missing?).map(&:current).reject { |path| root.join(path).exist? }
+    absent = manifest.pairs.reject(&:missing?).map(&:oublietted).reject { |path| root.join(path).exist? }
 
     expect(absent).to be_empty
   end

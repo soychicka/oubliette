@@ -32,6 +32,8 @@ module Oubliette
 end
 
 require_relative "oubliette/catalog"
+require_relative "oubliette/pair"
+require_relative "oubliette/ledger"
 require_relative "oubliette/detector"
 require_relative "oubliette/manifest"
 require_relative "oubliette/requires"

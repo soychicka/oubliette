@@ -34,11 +34,11 @@ module Oubliette
       private
         def javascript_substitutions
           %w[jest jasmine vitest @playwright/test cypress karma].filter_map do |key|
-            from_paths = @manifest.moves(only: key).reject(&:missing?)
-            next if from_paths.empty?
+            pairs = @manifest.pairs(only: key).reject(&:missing?)
+            next if pairs.empty?
 
-            from_paths.map { |move| [ move.from, move.applied || move.to ] }
-          end.flatten(1).reject { |from, to| from == to }
+            pairs.map { |pair| [ pair.origin, pair.oublietted ] }
+          end.flatten(1).reject { |origin, oublietted| origin == oublietted }
         end
 
         def substitute(node, substitutions)

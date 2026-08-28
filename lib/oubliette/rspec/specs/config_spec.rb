@@ -37,10 +37,11 @@ RSpec.describe "config writers" do
 
     it "writes nothing when the spec tree is missing from both locations" do
       box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
-      manifest = manifest_for(box)
+      manifest_for(box)
       FileUtils.remove_entry(box.root.join("spec"))
+      manifest = Oubliette::Manifest.load(box.root)
 
-      expect(described_class.new(box.root, manifest.refresh_statuses!, logger: quiet).apply).to eq(:skipped)
+      expect(described_class.new(box.root, manifest, logger: quiet).apply).to eq(:skipped)
     end
   end
 

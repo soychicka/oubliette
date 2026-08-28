@@ -40,9 +40,20 @@ namespace :oubliette do
     oubliette_runner(dry_run: true).status
   end
 
-  desc "Return directories to their original locations (rollback[gem_name] for one framework)"
+  desc "Return directories to their origin, the framework's own default location " \
+       "(rollback[gem_name] for one framework)"
   task :rollback, [ :gem ] do |_task, args|
     oubliette_runner.rollback(args[:gem])
+  end
+
+  desc "Alias for rollback -- put the directories back where their frameworks expect them"
+  task :put_back, [ :gem ] do |_task, args|
+    oubliette_runner.put_back(args[:gem])
+  end
+
+  desc "Overwrite migrate.yml's targets with oubliette's own defaults, then move to match"
+  task :reset, [ :gem ] do |_task, args|
+    oubliette_runner.reset(args[:gem])
   end
 
   desc "Run oubliette's own specs in a process that loads none of this application"

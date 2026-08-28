@@ -177,10 +177,32 @@ bin/rails test
 echo "==> selftest, with no app code loaded"
 bundle exec rake oubliette:selftest
 
-echo "==> rollback"
+echo "==> retarget migrate.yml by hand, then apply"
 git -c user.email=e2e@example.com -c user.name=e2e commit -qam "after oubliette"
+ruby -i -pe 'sub("oublietted: test/rspec", "oublietted: test/examples")' migrate.yml
+bundle exec rake oubliette
+test -d test/examples || { echo "the hand-edited target was ignored"; exit 1; }
+test ! -d test/rspec || { echo "the old target was left behind"; exit 1; }
+bundle exec rspec
+
+echo "==> reset back to oubliette defaults"
+git -c user.email=e2e@example.com -c user.name=e2e commit -qam "retargeted"
+bundle exec rake oubliette:reset
+test -d test/rspec || { echo "reset did not restore the default target"; exit 1; }
+test ! -d test/examples || { echo "reset left the edited target behind"; exit 1; }
+bundle exec rspec
+
+echo "==> put_back one framework"
+git -c user.email=e2e@example.com -c user.name=e2e commit -qam "reset"
+bundle exec rake "oubliette:put_back[cucumber-rails]"
+test -d features/step_definitions || { echo "put_back did not restore features/"; exit 1; }
+test -d test/rspec || { echo "put_back touched a framework it was not asked about"; exit 1; }
+
+echo "==> rollback everything"
+git -c user.email=e2e@example.com -c user.name=e2e commit -qam "put back cucumber"
 bundle exec rake oubliette:rollback
 test -d spec/models || { echo "rollback did not restore spec/"; exit 1; }
-test -d features/step_definitions || { echo "rollback did not restore features/"; exit 1; }
+test -d test/models || { echo "rollback did not restore test/models"; exit 1; }
+test -f rollback.yml || { echo "rollback.yml is missing"; exit 1; }
 
 echo "==> PASS"
