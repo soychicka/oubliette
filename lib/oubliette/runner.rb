@@ -80,6 +80,9 @@ module Oubliette
         if @root.join(pair.current).exist?
           mover.relocate(pair.current, pair.origin)
           ledger.record!(pair.gem, pair.origin, pair.origin) unless @dry_run
+        elsif @root.join(pair.origin).exist?
+          # Already home, carried back inside a parent that was restored first.
+          ledger.record!(pair.gem, pair.origin, pair.origin) unless @dry_run
         else
           @out.puts("  #{pair.gem}: #{pair.current} is gone, cannot restore #{pair.origin}")
         end

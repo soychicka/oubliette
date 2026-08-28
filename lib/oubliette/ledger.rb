@@ -57,9 +57,11 @@ module Oubliette
 
     def gems = @data["gems"].keys
 
-    # Everything oubliette has ever moved here, shallowest origin first, which
-    # is the order a rollback wants: a parent is restored before the children
-    # that were lifted out of it are put back inside.
+    # Everything oubliette has ever moved here, deepest origin first -- the same
+    # order the forward migration uses, and for the same reason. A child whose
+    # target sits inside its parent's target (spec/system inside spec) must be
+    # lifted out before the parent is moved, or the parent carries it along and
+    # the child's recorded location stops being true.
     def pairs(only: nil)
       @data["gems"].flat_map do |gem, entry|
         next [] if only && gem != only
@@ -73,7 +75,7 @@ module Oubliette
             status: status_for(path)
           )
         end
-      end.sort_by { |pair| [ pair.origin.count("/"), pair.origin ] }
+      end.sort_by { |pair| [ -pair.origin.count("/"), pair.origin ] }
     end
 
     def save!

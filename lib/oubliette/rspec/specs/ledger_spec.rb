@@ -32,11 +32,11 @@ RSpec.describe Oubliette::Ledger do
     expect(box).not_to be_exist("test/rspec")
   end
 
-  it "lists what it has moved shallowest origin first, the order a restore wants" do
+  it "lists what it has moved deepest origin first, so a nested directory is handled first" do
     box = sandbox(gems: %w[rspec-rails factory_bot_rails], dirs: %w[spec/models spec/factories])
     box.run
 
-    expect(described_class.load(box.root).pairs.map(&:origin)).to eq(%w[spec spec/factories])
+    expect(described_class.load(box.root).pairs.map(&:origin)).to eq(%w[spec/factories spec])
   end
 end
 
@@ -61,5 +61,31 @@ RSpec.describe "#{Oubliette}.path" do
     expect(box.read("migrate.yml")).to include("oubliette: test/rspec")
   ensure
     Oubliette.root = nil
+  end
+end
+
+RSpec.describe "#{Oubliette::Ledger} nested pairs" do
+  # spec/system's target lives inside spec's target, so restoring the parent
+  # carries the child home with it. The ledger has to notice.
+  it "still knows where a nested directory went after a rollback" do
+    box = sandbox(gems: %w[rspec-rails capybara], dirs: %w[spec/models spec/system])
+    box.run
+    expect(box).to be_exist("test/rspec/system")
+
+    box.runner.rollback
+
+    expect(box).to be_exist("spec/system")
+    expect(box.manifest.missing).to be_empty
+    expect(Oubliette::Ledger.load(box.root).current("capybara", "spec/system")).to eq("spec/system")
+  end
+
+  it "re-migrates a nested directory on the next run" do
+    box = sandbox(gems: %w[rspec-rails capybara], dirs: %w[spec/models spec/system])
+    box.run
+    box.runner.rollback
+    box.commit("rolled back")
+    box.run
+
+    expect(box).to be_exist("test/rspec/system")
   end
 end
