@@ -1,0 +1,200 @@
+# frozen_string_literal: true
+
+module Oubliette
+  # The catalog is the shipped knowledge of where each test framework keeps its
+  # assets by default, and where oubliette would rather they lived. It is data
+  # only -- nothing here touches the filesystem. Entries are consulted in order,
+  # so an earlier entry wins a directory that two frameworks both claim
+  # (spec/javascript, for instance, belongs to jest before jasmine).
+  module Catalog
+    ROOT = "test"
+
+    # ecosystem  :ruby | :javascript
+    # gems       names looked for in Gemfile / Gemfile.lock
+    # packages   names looked for in package.json dependencies
+    # paths      directories whose mere presence proves the framework is in use
+    # moves      from => to, relative to the project root
+    # config     symbols naming the config writers that must be rewritten
+    ENTRIES = [
+      {
+        key: "rspec-rails", label: "RSpec", ecosystem: :ruby,
+        gems: %w[rspec-rails rspec], paths: %w[spec],
+        moves: { "spec" => "test/rspec" },
+        config: %i[rspec]
+      },
+      {
+        key: "support", label: "Shared support helpers", ecosystem: :ruby,
+        gems: [], paths: %w[spec/support test/support],
+        moves: { "spec/support" => "test/support", "test/support" => "test/support" },
+        config: %i[]
+      },
+      {
+        key: "factory_bot_rails", label: "FactoryBot", ecosystem: :ruby,
+        gems: %w[factory_bot_rails factory_bot factory_girl_rails factory_girl],
+        paths: %w[spec/factories test/factories factories],
+        moves: {
+          "spec/factories" => "test/data/factories",
+          "test/factories" => "test/data/factories",
+          "factories" => "test/data/factories"
+        },
+        config: %i[factory_bot]
+      },
+      {
+        key: "fixtures", label: "Fixtures", ecosystem: :ruby,
+        gems: [], paths: %w[test/fixtures spec/fixtures],
+        moves: {
+          "test/fixtures" => "test/data/fixtures",
+          "spec/fixtures" => "test/data/fixtures"
+        },
+        config: %i[fixtures]
+      },
+      {
+        key: "attributes", label: "Attribute sets", ecosystem: :ruby,
+        gems: [], paths: %w[spec/attributes test/attributes],
+        moves: {
+          "spec/attributes" => "test/data/attributes",
+          "test/attributes" => "test/data/attributes"
+        },
+        config: %i[]
+      },
+      {
+        key: "exemplars", label: "Exemplars", ecosystem: :ruby,
+        gems: [], paths: %w[spec/exemplars test/exemplars],
+        moves: {
+          "spec/exemplars" => "test/data/exemplars",
+          "test/exemplars" => "test/data/exemplars"
+        },
+        config: %i[]
+      },
+      {
+        key: "seeds", label: "Test seeds", ecosystem: :ruby,
+        gems: [], paths: %w[spec/seeds test/seeds db/seeds/test],
+        moves: {
+          "spec/seeds" => "test/data/seeds",
+          "test/seeds" => "test/data/seeds",
+          "db/seeds/test" => "test/data/seeds"
+        },
+        config: %i[]
+      },
+      {
+        key: "vcr", label: "VCR cassettes", ecosystem: :ruby,
+        gems: %w[vcr], paths: %w[spec/vcr_cassettes spec/cassettes test/vcr_cassettes],
+        moves: {
+          "spec/vcr_cassettes" => "test/data/cassettes",
+          "spec/cassettes" => "test/data/cassettes",
+          "test/vcr_cassettes" => "test/data/cassettes"
+        },
+        config: %i[vcr]
+      },
+      {
+        key: "capybara", label: "Capybara system tests", ecosystem: :ruby,
+        gems: %w[capybara], paths: %w[spec/system spec/features test/system],
+        moves: {
+          "spec/system" => "test/system",
+          "spec/features" => "test/system",
+          "test/system" => "test/system"
+        },
+        config: %i[capybara]
+      },
+      {
+        key: "cucumber-rails", label: "Cucumber", ecosystem: :ruby,
+        gems: %w[cucumber-rails cucumber], paths: %w[features],
+        moves: { "features" => "test/cucumber/features" },
+        config: %i[cucumber cucumber_env]
+      },
+      {
+        key: "aruba", label: "Aruba", ecosystem: :ruby,
+        gems: %w[aruba], paths: %w[features/aruba],
+        moves: { "features/aruba" => "test/cucumber/aruba" },
+        config: %i[]
+      },
+      {
+        key: "minitest", label: "Minitest / Rails default tests", ecosystem: :ruby,
+        gems: %w[minitest minitest-rails], paths: %w[test/models test/controllers test/integration],
+        moves: %w[
+          models controllers integration mailers helpers jobs channels services decorators
+        ].to_h { |dir| [ "test/#{dir}", "test/minitest/#{dir}" ] },
+        config: %i[]
+      },
+      {
+        key: "test-unit", label: "Test::Unit", ecosystem: :ruby,
+        gems: %w[test-unit], paths: %w[test/unit],
+        moves: { "test/unit" => "test/unit" },
+        config: %i[]
+      },
+      {
+        key: "simplecov", label: "SimpleCov", ecosystem: :ruby,
+        gems: %w[simplecov], paths: %w[coverage],
+        moves: { "coverage" => "test/results/coverage" },
+        config: %i[simplecov]
+      },
+      {
+        key: "results", label: "Test reports and artifacts", ecosystem: :ruby,
+        gems: [], paths: %w[test_results spec/reports test/reports tmp/screenshots],
+        moves: {
+          "test_results" => "test/results/reports",
+          "spec/reports" => "test/results/reports",
+          "test/reports" => "test/results/reports",
+          "tmp/screenshots" => "test/results/screenshots"
+        },
+        config: %i[]
+      },
+      {
+        key: "jest", label: "Jest", ecosystem: :javascript,
+        packages: %w[jest], paths: %w[__tests__ spec/javascript test/javascript],
+        moves: {
+          "__tests__" => "test/javascript/jest",
+          "spec/javascript" => "test/javascript/jest",
+          "test/javascript" => "test/javascript/jest"
+        },
+        config: %i[jest]
+      },
+      {
+        key: "jasmine", label: "Jasmine", ecosystem: :javascript,
+        packages: %w[jasmine jasmine-core], paths: %w[spec/jasmine jasmine],
+        moves: {
+          "spec/jasmine" => "test/javascript/jasmine",
+          "jasmine" => "test/javascript/jasmine"
+        },
+        config: %i[manual]
+      },
+      {
+        key: "vitest", label: "Vitest", ecosystem: :javascript,
+        packages: %w[vitest], paths: %w[tests/unit],
+        moves: { "tests/unit" => "test/javascript/vitest" },
+        config: %i[manual]
+      },
+      {
+        key: "@playwright/test", label: "Playwright", ecosystem: :javascript,
+        packages: %w[@playwright/test playwright], paths: %w[e2e tests/e2e playwright],
+        moves: {
+          "e2e" => "test/javascript/playwright",
+          "tests/e2e" => "test/javascript/playwright",
+          "playwright" => "test/javascript/playwright"
+        },
+        config: %i[manual]
+      },
+      {
+        key: "cypress", label: "Cypress", ecosystem: :javascript,
+        packages: %w[cypress], paths: %w[cypress],
+        moves: { "cypress" => "test/javascript/cypress" },
+        config: %i[manual]
+      },
+      {
+        key: "karma", label: "Karma", ecosystem: :javascript,
+        packages: %w[karma], paths: %w[karma spec/karma],
+        moves: { "karma" => "test/javascript/karma", "spec/karma" => "test/javascript/karma" },
+        config: %i[manual]
+      }
+    ].freeze
+
+    # Root directories that look like test trees but belong to no known
+    # framework. They are offered in migrate.yml under the "project" key,
+    # disabled, so the user opts in by editing the file.
+    STRAY_PATTERN = /\A(?:.*[-_])?(?:de|un|old|legacy|new|wip)?(?:spec|specs|test|tests)\z/
+
+    def self.entries = ENTRIES
+
+    def self.find(key) = ENTRIES.find { |entry| entry[:key] == key }
+  end
+end

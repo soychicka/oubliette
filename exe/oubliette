@@ -1,0 +1,36 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "oubliette"
+
+command = ARGV.shift || "status"
+dry_run = ARGV.delete("--dry-run") ? true : false
+force = ARGV.delete("--force") ? true : false
+runner = Oubliette::Runner.new(Oubliette.root, dry_run: dry_run, force: force)
+
+begin
+  case command
+  when "prepare" then runner.prepare
+  when "run" then runner.call
+  when "status" then runner.status
+  when "rollback" then runner.rollback(ARGV.shift)
+  when "-h", "--help", "help"
+    puts <<~TEXT
+      oubliette -- hide every test asset under one central test/ directory
+
+        oubliette prepare            write migrate.yml so targets can be edited first
+        oubliette run                move, sync, and rewrite framework config
+        oubliette run --dry-run      show what would change
+        oubliette status             report where every test directory lives
+        oubliette rollback [gem]     put directories back where they came from
+
+      migrate.yml is the source of truth. Edit it and rerun `oubliette run`.
+    TEXT
+  else
+    warn "unknown command #{command.inspect} -- try `oubliette --help`"
+    exit 1
+  end
+rescue Oubliette::Error => error
+  warn "oubliette: #{error.message}"
+  exit 1
+end

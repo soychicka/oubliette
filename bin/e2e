@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# Builds a brand new Rails application with every framework oubliette knows how
+# to relocate, proves the default test commands work, migrates the app, and
+# proves they still work. Takes a few minutes; it really does bundle install.
+set -euo pipefail
+
+# Do not inherit the calling project's bundler context.
+unset BUNDLE_GEMFILE BUNDLE_PATH BUNDLE_BIN_PATH RUBYOPT || true
+
+# The build directory is outside any project, so pin the interpreter rather than
+# letting rbenv fall back to whatever the global version happens to be.
+export RBENV_VERSION="${RBENV_VERSION:-3.4.1}"
+
+GEM_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+APP_DIR="${1:?usage: bin/e2e /path/to/build/dir}"
+APP="$APP_DIR/oubliette_e2e"
+
+rm -rf "$APP"
+mkdir -p "$APP_DIR"
+
+echo "==> rails new"
+(cd "$APP_DIR" && rails new oubliette_e2e --skip-bootsnap --skip-kamal --skip-solid \
+  --skip-ci --skip-docker --skip-jbuilder --skip-brakeman --skip-rubocop --quiet)
+
+cd "$APP"
+
+cat >> Gemfile <<'RUBY'
+
+gem "oubliette", path: "GEM_DIR_PLACEHOLDER"
+
+group :development, :test do
+  gem "rspec-rails"
+  gem "factory_bot_rails"
+end
+
+group :test do
+  gem "capybara"
+  gem "cucumber-rails", require: false
+  gem "database_cleaner-active_record"
+  gem "simplecov", require: false
+  gem "vcr"
+end
+RUBY
+export GEM_DIR
+ruby -i -pe "sub(%r{GEM_DIR_PLACEHOLDER}, ENV.fetch('GEM_DIR'))" Gemfile
+
+echo "==> bundle install"
+bundle install --quiet
+
+echo "==> generators"
+bin/rails generate model Widget name:string --quiet
+bin/rails generate rspec:install --quiet
+bin/rails generate cucumber:install --quiet
+bin/rails db:prepare
+
+echo "==> seed every framework with something to find"
+mkdir -p spec/models spec/factories spec/support spec/attributes spec/vcr_cassettes \
+         spec/system spec/javascript test/models test/fixtures test_results coverage
+
+cat > spec/models/arithmetic_spec.rb <<'RUBY'
+require "rails_helper"
+
+RSpec.describe "arithmetic" do
+  it "adds" do
+    expect(1 + 1).to eq(2)
+  end
+
+  it "can see the shared support helper" do
+    expect(OublietteE2E.answer).to eq(42)
+  end
+end
+RUBY
+
+cat > spec/support/shared.rb <<'RUBY'
+module OublietteE2E
+  def self.answer = 42
+end
+RUBY
+
+# The one line an application has to write for itself: ask oubliette where the
+# shared helpers went instead of hardcoding spec/support.
+cat >> spec/rails_helper.rb <<'RUBY'
+
+support = Oubliette.path("support") || Rails.root.join("spec/support")
+Dir[File.join(support, "**", "*.rb")].sort.each { |file| require file }
+RUBY
+
+cat > spec/factories/widgets.rb <<'RUBY'
+FactoryBot.define do
+  factory :widget do
+    name { "widget" }
+  end
+end
+RUBY
+
+cat > spec/models/widget_spec.rb <<'RUBY'
+require "rails_helper"
+
+RSpec.describe Widget do
+  it "builds from the relocated factory" do
+    expect(FactoryBot.build(:widget).name).to eq("widget")
+  end
+end
+RUBY
+
+cat > spec/attributes/widget.yml <<'YAML'
+name: widget
+YAML
+
+cat > features/arithmetic.feature <<'GHERKIN'
+Feature: arithmetic
+  Scenario: adding
+    Given I have the number 1
+    When I add 1
+    Then I get 2
+GHERKIN
+
+cat > features/step_definitions/arithmetic_steps.rb <<'RUBY'
+Given("I have the number {int}") { |number| @total = number }
+When("I add {int}") { |number| @total += number }
+Then("I get {int}") { |number| expect(@total).to eq(number) }
+RUBY
+
+cat > test/models/arithmetic_test.rb <<'RUBY'
+require "test_helper"
+
+class ArithmeticTest < ActiveSupport::TestCase
+  test "adds" do
+    assert_equal 2, 1 + 1
+  end
+
+  test "loads the relocated fixtures" do
+    assert_equal "widget", widgets(:one).name
+  end
+end
+RUBY
+
+cat > test/fixtures/widgets.yml <<'YAML'
+one:
+  name: widget
+YAML
+
+cat > spec/javascript/arithmetic.test.js <<'JS'
+test("adds", () => { expect(1 + 1).toBe(2); });
+JS
+
+touch spec/vcr_cassettes/.keep spec/system/.keep test_results/.keep coverage/.keep
+
+ruby -rjson -e '
+  pkg = JSON.parse(File.read("package.json")) rescue { "name" => "oubliette-e2e", "private" => true }
+  pkg["devDependencies"] = (pkg["devDependencies"] || {}).merge("jest" => "^29.0.0")
+  pkg["scripts"] = (pkg["scripts"] || {}).merge("test" => "jest spec/javascript")
+  File.write("package.json", JSON.pretty_generate(pkg) + "\n")
+'
+
+git add -A && git -c user.email=e2e@example.com -c user.name=e2e commit -qm "before oubliette"
+
+echo "==> baseline"
+bundle exec rspec
+bundle exec cucumber --format progress
+bin/rails test
+
+echo "==> oubliette dry run"
+bundle exec rake oubliette:dry_run
+
+echo "==> oubliette"
+bundle exec rake oubliette
+
+echo "==> layout"
+find test -maxdepth 2 -type d | sort
+
+echo "==> after migration"
+bundle exec rspec
+bundle exec cucumber --format progress
+bin/rails test
+
+echo "==> selftest, with no app code loaded"
+bundle exec rake oubliette:selftest
+
+echo "==> rollback"
+git -c user.email=e2e@example.com -c user.name=e2e commit -qam "after oubliette"
+bundle exec rake oubliette:rollback
+test -d spec/models || { echo "rollback did not restore spec/"; exit 1; }
+test -d features/step_definitions || { echo "rollback did not restore features/"; exit 1; }
+
+echo "==> PASS"

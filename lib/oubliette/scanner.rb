@@ -1,0 +1,68 @@
+# frozen_string_literal: true
+
+require "pathname"
+
+module Oubliette
+  # Finds hardcoded references to the old locations that survived the move.
+  #
+  # Oubliette rewrites the frameworks' own configuration, but it will not edit
+  # application code, and a project of any age has `Rails.root.join("spec/...")`
+  # written into a helper somewhere. Those are reported rather than rewritten.
+  class Scanner
+    SEARCHABLE = %w[.rb .rake .yml .yaml .js .ts .json .erb .feature .sh].freeze
+    SKIP = %w[.git node_modules tmp log vendor .oubliette public storage coverage].freeze
+
+    Finding = Data.define(:file, :line, :path, :text)
+
+    def initialize(root, manifest)
+      @root = Pathname.new(root)
+      @manifest = manifest
+    end
+
+    def findings
+      olds = @manifest.moves.reject(&:canonical?).map(&:from).uniq
+      return [] if olds.empty?
+
+      pattern = Regexp.union(olds.flat_map { |old| patterns_for(old) })
+
+      files.flat_map { |file| scan(file, pattern) }
+    end
+    private
+      # Only path-shaped occurrences count. "This spec was generated" and
+      # "checkbox with support features" are prose, and reporting them would
+      # bury the handful of references that genuinely need editing.
+      def patterns_for(old)
+        escaped = Regexp.escape(old)
+        [
+          %r{(?<![\w/.-])#{escaped}/},
+          %r{(?<=["'`])#{escaped}(?=["'`])}
+        ]
+      end
+
+      def files
+        @root.glob("**/*").select do |path|
+          path.file? && SEARCHABLE.include?(path.extname) && !skipped?(path)
+        end
+      end
+
+      def skipped?(path)
+        relative = path.relative_path_from(@root).to_s
+        return true if relative == Manifest::FILENAME
+
+        SKIP.any? { |dir| relative == dir || relative.start_with?("#{dir}/") }
+      end
+
+      def scan(file, pattern)
+        relative = file.relative_path_from(@root).to_s
+
+        file.each_line.with_index(1).filter_map do |line, number|
+          match = line[pattern]
+          next unless match
+
+          Finding.new(file: relative, line: number, path: match, text: line.strip)
+        end
+      rescue ArgumentError
+        [] # binary file wearing a text extension
+      end
+  end
+end
