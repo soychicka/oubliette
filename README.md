@@ -50,18 +50,18 @@ gems:
     config: [rspec]
     paths:
     - origin: spec
-      oublietted: test/rspec
+      oubliette: test/rspec
   factory_bot_rails:
     enabled: true
     config: [factory_bot]
     paths:
     - origin: spec/factories
-      oublietted: test/data/factories
+      oubliette: test/data/factories
     - origin: test/factories
-      oublietted: test/data/factories
+      oubliette: test/data/factories
 ```
 
-**rollback.yml is oubliette's.** It records the same pairs, but `oublietted` is
+**rollback.yml is oubliette's.** It records the same pairs, but `oubliette` is
 where each directory *actually is*, and `origin` is the framework's own default
 location, written once and never rewritten.
 
@@ -70,7 +70,7 @@ gems:
   rspec-rails:
     paths:
     - origin: spec
-      oublietted: test/examples
+      oubliette: test/examples
 ```
 
 The split is the point. You can retarget a directory in migrate.yml as often as
@@ -81,7 +81,7 @@ never stored in the file you edit.
 ## What each command does with them
 
 `rake oubliette` compares the two files pair by pair and **only touches entries
-that differ**. A pair whose `oublietted` already matches rollback.yml is skipped
+that differ**. A pair whose `oubliette` already matches rollback.yml is skipped
 entirely, which is why the same command serves as the first migration, the sync
 after installing a new framework, and the way you apply an edit. A directory
 whose target changed goes back to its `origin` first and is then moved to the

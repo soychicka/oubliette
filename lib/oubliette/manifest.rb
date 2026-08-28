@@ -85,14 +85,14 @@ module Oubliette
     def destination(key) = destinations(key).first
 
     def destinations(key)
-      pairs(only: key).reject(&:missing?).map(&:oublietted).uniq
+      pairs(only: key).reject(&:missing?).map(&:oubliette).uniq
     end
 
     # Throws hand-edited targets away and puts oubliette's own defaults back.
     def reset_targets!(only: nil)
       each_raw_pair(only: only) do |key, path|
         default = default_target(key, path["origin"])
-        path["oublietted"] = default if default
+        path["oubliette"] = default if default
       end
       self
     end
@@ -106,7 +106,7 @@ module Oubliette
       <<~YAML + @data.to_yaml.sub(/\A---\n/, "")
         # migrate.yml -- where you want each framework's directories to live.
         #
-        # Edit `oublietted:` to send a directory somewhere else, flip `enabled:`
+        # Edit `oubliette:` to send a directory somewhere else, flip `enabled:`
         # to skip a framework, then rerun `rake oubliette`. Only the entries that
         # differ from rollback.yml are touched, so a rerun is cheap.
         #
@@ -118,23 +118,23 @@ module Oubliette
     private
       def pair_for(key, path)
         origin = path["origin"]
-        oublietted = path["oublietted"]
+        oubliette = path["oubliette"]
         current = ledger.current(key, origin) || origin
 
         Pair.new(
           gem: key,
           origin: origin,
-          oublietted: oublietted,
+          oubliette: oubliette,
           current: current,
-          status: status_for(origin, oublietted, current)
+          status: status_for(origin, oubliette, current)
         )
       end
 
-      def status_for(origin, oublietted, current)
-        return :canonical if origin == oublietted
-        return @root.join(oublietted).exist? ? :settled : :missing if current == oublietted
+      def status_for(origin, oubliette, current)
+        return :canonical if origin == oubliette
+        return @root.join(oubliette).exist? ? :settled : :missing if current == oubliette
         return :pending if @root.join(current).exist?
-        return :settled if @root.join(oublietted).exist?
+        return :settled if @root.join(oubliette).exist?
 
         :missing
       end
@@ -146,11 +146,11 @@ module Oubliette
           "paths" => []
         })
 
-        detection.moves.each do |origin, oublietted|
+        detection.moves.each do |origin, oubliette|
           next if Array(gem["paths"]).any? { |path| path["origin"] == origin }
           next unless relevant?(detection.key, origin)
 
-          gem["paths"] << { "origin" => origin, "oublietted" => oublietted }
+          gem["paths"] << { "origin" => origin, "oubliette" => oubliette }
         end
       end
 
@@ -177,7 +177,7 @@ module Oubliette
           @data["strays"][name] = {
             "enabled" => false,
             "note" => "unclaimed test-shaped directory -- set enabled: true to include it",
-            "paths" => [ { "origin" => name, "oublietted" => "#{@data['root']}/#{name}" } ]
+            "paths" => [ { "origin" => name, "oubliette" => "#{@data['root']}/#{name}" } ]
           }
         end
 
@@ -204,7 +204,7 @@ module Oubliette
 
       def default_target(key, origin)
         Catalog.find(key)&.dig(:moves, origin) ||
-          @data["strays"].dig(key, "paths", 0, "oublietted")
+          @data["strays"].dig(key, "paths", 0, "oubliette")
       end
   end
 end

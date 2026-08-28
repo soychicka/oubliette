@@ -12,7 +12,7 @@ RSpec.describe Oubliette::Ledger do
   it "still knows the origin after migrate.yml has been retargeted" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/rspec", "oublietted: test/examples"))
+    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
     box.commit("retarget")
     box.run
 

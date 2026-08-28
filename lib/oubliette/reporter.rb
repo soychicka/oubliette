@@ -37,7 +37,7 @@ module Oubliette
         @out.puts("#{key} (#{@manifest.enabled?(key) ? 'enabled' : 'disabled'})")
         pairs.each do |pair|
           label = STATUS_LABEL.fetch(pair.status, pair.status.to_s)
-          @out.puts(format("  %-14s %s -> %s", label, pair.origin, pair.oublietted))
+          @out.puts(format("  %-14s %s -> %s", label, pair.origin, pair.oubliette))
         end
       end
 
@@ -56,7 +56,7 @@ module Oubliette
 
         @out.puts
         @out.puts("WARNING: missing from both locations -- config will be disabled")
-        missing.each { |pair| @out.puts("  #{pair.gem}: #{pair.origin} (expected at #{pair.oublietted})") }
+        missing.each { |pair| @out.puts("  #{pair.gem}: #{pair.origin} (expected at #{pair.oubliette})") }
       end
   end
 end

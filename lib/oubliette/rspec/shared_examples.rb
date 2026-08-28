@@ -44,7 +44,7 @@ RSpec.shared_examples "an oubliette-managed project" do |project_root|
   end
 
   it "points every recorded destination at a directory that exists" do
-    absent = manifest.pairs.reject(&:missing?).map(&:oublietted).reject { |path| root.join(path).exist? }
+    absent = manifest.pairs.reject(&:missing?).map(&:oubliette).reject { |path| root.join(path).exist? }
 
     expect(absent).to be_empty
   end

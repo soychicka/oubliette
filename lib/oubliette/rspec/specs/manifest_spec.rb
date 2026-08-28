@@ -11,7 +11,7 @@ RSpec.describe Oubliette::Manifest do
   it "pairs every origin with the target oubliette would give it" do
     manifest = described_class.build(sandbox(gems: %w[rspec-rails], dirs: %w[spec]).root)
 
-    expect(manifest.pairs.map { |pair| [ pair.origin, pair.oublietted ] })
+    expect(manifest.pairs.map { |pair| [ pair.origin, pair.oubliette ] })
       .to eq([ %w[spec test/rspec] ])
   end
 
@@ -24,7 +24,7 @@ RSpec.describe Oubliette::Manifest do
   it "keeps a hand-edited target across a sync" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
     described_class.build(box.root).save!
-    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/rspec", "oublietted: test/examples"))
+    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
 
     expect(described_class.build(box.root).destination("rspec-rails")).to eq("test/examples")
   end
@@ -75,7 +75,7 @@ RSpec.describe Oubliette::Manifest do
   it "calls a pair pending as soon as the target is edited" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oublietted: test/rspec", "oublietted: test/examples"))
+    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
 
     expect(box.manifest.pairs.map(&:status)).to eq([ :pending ])
   end
@@ -83,7 +83,7 @@ RSpec.describe Oubliette::Manifest do
   it "puts its own defaults back on reset, discarding the edit" do
     box = sandbox(gems: %w[rspec-rails factory_bot_rails], dirs: %w[spec spec/factories])
     manifest = described_class.build(box.root)
-    manifest.data["gems"]["rspec-rails"]["paths"][0]["oublietted"] = "somewhere/else"
+    manifest.data["gems"]["rspec-rails"]["paths"][0]["oubliette"] = "somewhere/else"
     manifest.reset_targets!
 
     expect(manifest.destination("rspec-rails")).to eq("test/rspec")
@@ -93,8 +93,8 @@ RSpec.describe Oubliette::Manifest do
   it "resets one framework and leaves another edit alone" do
     box = sandbox(gems: %w[rspec-rails factory_bot_rails], dirs: %w[spec spec/factories])
     manifest = described_class.build(box.root)
-    manifest.data["gems"]["rspec-rails"]["paths"][0]["oublietted"] = "somewhere/else"
-    manifest.data["gems"]["factory_bot_rails"]["paths"][0]["oublietted"] = "elsewhere"
+    manifest.data["gems"]["rspec-rails"]["paths"][0]["oubliette"] = "somewhere/else"
+    manifest.data["gems"]["factory_bot_rails"]["paths"][0]["oubliette"] = "elsewhere"
     manifest.reset_targets!(only: "factory_bot_rails")
 
     expect(manifest.destination("rspec-rails")).to eq("somewhere/else")

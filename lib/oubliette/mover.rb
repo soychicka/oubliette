@@ -99,6 +99,8 @@ module Oubliette
 
     # migrate.yml and the config backups are oubliette's own working files, so
     # their being uncommitted is never a reason to refuse to run.
+    PLACEHOLDERS = %w[.keep .gitkeep].freeze
+
     OWNED = [
       Manifest::FILENAME, Ledger::FILENAME, Config::Writer::BACKUP_DIR.split("/").first
     ].freeze
@@ -133,12 +135,34 @@ module Oubliette
           if child.directory? && destination.directory?
             merge_into(child, destination)
           elsif destination.exist?
-            raise Error, "refusing to overwrite #{relative(destination)}"
+            discard(child, destination)
           else
             git_mv(child, destination) || FileUtils.mv(child.to_s, destination.to_s)
           end
         end
-        source.rmdir if source.children.empty?
+        source.rmdir if source.directory? && source.children.empty?
+      end
+
+      # Two directories merging into one can each carry a git placeholder, and
+      # one placeholder is as good as another -- refusing the whole migration
+      # over a pair of empty .keep files would be absurd. Anything with content
+      # is a real collision and stops the run.
+      def discard(child, destination)
+        raise Error, "refusing to overwrite #{relative(destination)}" unless placeholder?(child)
+
+        git_rm(child) || child.delete
+      end
+
+      def placeholder?(path)
+        PLACEHOLDERS.include?(path.basename.to_s) && path.file? && path.size.zero?
+      end
+
+      def git_rm(path)
+        return false unless git?
+
+        system("git", "-C", @root.to_s, "rm", "-q", "-f", "--", relative(path),
+               out: File::NULL, err: File::NULL)
+        !path.exist?
       end
 
       # git mv refuses a directory that holds untracked files, so its success is

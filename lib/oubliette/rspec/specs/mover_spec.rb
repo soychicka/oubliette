@@ -44,3 +44,24 @@ RSpec.describe Oubliette::Mover do
     expect(mover).not_to be_clean
   end
 end
+
+RSpec.describe "#{Oubliette::Mover} merging placeholders" do
+  it "drops a duplicate git placeholder rather than refusing the merge" do
+    box = sandbox(gems: %w[factory_bot_rails], dirs: %w[spec/factories test/factories])
+    box.run
+
+    expect(box).to be_exist("test/data/factories/.keep")
+    expect(box).not_to be_exist("spec/factories")
+    expect(box).not_to be_exist("test/factories")
+  end
+
+  it "still refuses when both files have content" do
+    box = sandbox(gems: %w[factory_bot_rails], dirs: [])
+    box.write("spec/factories/users.rb", "one")
+    box.write("test/factories/users.rb", "two")
+    box.commit("two factories")
+
+    expect { box.run }.to raise_error(Oubliette::Error, /refusing to overwrite/)
+    expect(box.read("test/factories/users.rb")).to eq("two")
+  end
+end

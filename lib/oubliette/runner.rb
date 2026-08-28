@@ -112,7 +112,7 @@ module Oubliette
           end
 
           pair.hops.each { |from, to| mover.relocate(from, to) }
-          ledger.record!(pair.gem, pair.origin, pair.oublietted) unless @dry_run
+          ledger.record!(pair.gem, pair.origin, pair.oubliette) unless @dry_run
         end
 
         ledger.save! unless @dry_run

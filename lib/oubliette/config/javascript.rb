@@ -37,8 +37,8 @@ module Oubliette
             pairs = @manifest.pairs(only: key).reject(&:missing?)
             next if pairs.empty?
 
-            pairs.map { |pair| [ pair.origin, pair.oublietted ] }
-          end.flatten(1).reject { |origin, oublietted| origin == oublietted }
+            pairs.map { |pair| [ pair.origin, pair.oubliette ] }
+          end.flatten(1).reject { |origin, oubliette| origin == oubliette }
         end
 
         def substitute(node, substitutions)

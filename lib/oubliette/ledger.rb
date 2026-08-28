@@ -36,15 +36,15 @@ module Oubliette
 
     # Where this directory is right now, or nil if oubliette has never moved it.
     def current(gem, origin)
-      entry(gem, origin)&.fetch("oublietted", nil)
+      entry(gem, origin)&.fetch("oubliette", nil)
     end
 
-    def record!(gem, origin, oublietted)
+    def record!(gem, origin, oubliette)
       found = entry(gem, origin)
       if found
-        found["oublietted"] = oublietted
+        found["oubliette"] = oubliette
       else
-        paths_for(gem) << { "origin" => origin, "oublietted" => oublietted }
+        paths_for(gem) << { "origin" => origin, "oubliette" => oubliette }
       end
       self
     end
@@ -68,8 +68,8 @@ module Oubliette
           Pair.new(
             gem: gem,
             origin: path["origin"],
-            oublietted: path["origin"],
-            current: path["oublietted"],
+            oubliette: path["origin"],
+            current: path["oubliette"],
             status: status_for(path)
           )
         end
@@ -86,7 +86,7 @@ module Oubliette
         # rollback.yml -- written by oubliette, not by you.
         #
         # `origin` is where each framework keeps this directory by default.
-        # `oublietted` is where it is right now. Editing migrate.yml changes
+        # `oubliette` is where it is right now. Editing migrate.yml changes
         # where things are going; it never changes where they came from, which
         # is what `rake oubliette:rollback` reads.
       YAML
@@ -101,8 +101,8 @@ module Oubliette
       end
 
       def status_for(path)
-        return :settled if path["origin"] == path["oublietted"]
-        return :settled if @root.join(path["oublietted"]).exist?
+        return :settled if path["origin"] == path["oubliette"]
+        return :settled if @root.join(path["oubliette"]).exist?
 
         :missing
       end

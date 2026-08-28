@@ -179,7 +179,7 @@ bundle exec rake oubliette:selftest
 
 echo "==> retarget migrate.yml by hand, then apply"
 git -c user.email=e2e@example.com -c user.name=e2e commit -qam "after oubliette"
-ruby -i -pe 'sub("oublietted: test/rspec", "oublietted: test/examples")' migrate.yml
+ruby -i -pe 'sub("oubliette: test/rspec", "oubliette: test/examples")' migrate.yml
 bundle exec rake oubliette
 test -d test/examples || { echo "the hand-edited target was ignored"; exit 1; }
 test ! -d test/rspec || { echo "the old target was left behind"; exit 1; }
