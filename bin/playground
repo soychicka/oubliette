@@ -34,10 +34,15 @@ group :development, :test do
   gem "factory_bot_rails"
 end
 
+# An engine with its own javascript, so there is something real for the browser
+# specs to drive and for oubliette to leave alone.
+gem "administrate", "~> 1.0"
+
 group :test do
   gem "capybara"
   gem "cucumber-rails", require: false
   gem "database_cleaner-active_record"
+  gem "selenium-webdriver"
   gem "simplecov", require: false
   gem "vcr"
   gem "webmock"
@@ -55,6 +60,30 @@ bin/rails db:prepare
 
 ruby -i -pe 'sub(/^end$/, "  belongs_to :category\n\n  validates :name, presence: true\n  validates :quantity, numericality: { greater_than_or_equal_to: 0 }\n\n  def restock?\n    quantity < 5\n  end\nend")' app/models/widget.rb
 ruby -i -pe 'sub(/^end$/, "  has_many :widgets, dependent: :destroy\n\n  validates :name, presence: true\nend")' app/models/category.rb
+echo "==> administrate"
+bin/rails generate administrate:install --quiet 2>&1 | grep -v "^WARNING\|^       -\|^         " || true
+
+# Administrate labels a record "Category #<id>" unless the dashboard says
+# otherwise, and that label is what the belongs_to dropdown shows.
+for pair in "category_dashboard:category" "widget_dashboard:widget"; do
+  file="app/dashboards/${pair%%:*}.rb"; arg="${pair##*:}"
+  ARG="$arg" ruby -i -e '
+    body = ARGF.read
+    arg = ENV.fetch("ARG")
+    addition = "\n  # Without this administrate shows \"Model #<id>\" wherever a record is\n" \
+               "  # named, including inside the belongs_to dropdown.\n" \
+               "  def display_resource(#{arg})\n    #{arg}.name\n  end\n"
+    print body.sub(/\nend\s*\z/, addition + "end\n")
+  ' "$file"
+  grep -q "def display_resource" "$file" || { echo "failed to patch $file"; exit 1; }
+done
+
+# The filter tooltip only renders when the dashboard declares filters, and the
+# tooltip is one of the three stimulus controllers worth covering.
+ruby -i -pe 'sub(/^  COLLECTION_FILTERS = \{\}\.freeze$/, %q{  COLLECTION_FILTERS = {
+    available: ->(resources) { resources.where(available: true) }
+  }.freeze})' app/dashboards/widget_dashboard.rb
+
 # The scaffold generators write their own specs, factories and tests. Clear them
 # out so the ones written further down are the only ones in the app -- two
 # `factory :category` definitions is an error, not a merge.
@@ -100,6 +129,79 @@ if (typeof module !== "undefined" && module.exports) {
 }
 JS
 
+cat > app/javascript/admin_behaviours.js <<'JS'
+// The rules administrate's stimulus controllers embody, written out so they can
+// be checked headlessly by jest and by jasmine.
+//
+// The engine's real behaviour in a browser is covered by the capybara specs in
+// spec/system/admin. These cover the same decisions without a browser, which is
+// what makes them useful for proving the javascript suites still run after
+// oubliette has moved them.
+var KEYCODES = { space: 32, enter: 13 };
+
+// table_controller#visitDataUrl
+function shouldVisitRow(event) {
+  var triggered =
+    event.type === "click" ||
+    event.keyCode === KEYCODES.space ||
+    event.keyCode === KEYCODES.enter;
+
+  if (!triggered) return false;
+  if (event.targetIsLink) return false;
+  if ((event.selectionLength || 0) > 0) return false;
+
+  return Boolean(event.dataUrl);
+}
+
+// tooltip_controller
+function popoverStateFor(eventType, current) {
+  if (eventType === "mouseenter") return "open";
+  if (eventType === "mouseleave") return "closed";
+  return current;
+}
+
+// select_controller: the value has to survive being enhanced and torn down,
+// and both halves are guarded so they can run twice without harm.
+function createSelect(initialValue) {
+  var value = initialValue;
+  var enhanced = false;
+
+  return {
+    connect: function () {
+      if (!enhanced) enhanced = true;
+      return value;
+    },
+    choose: function (next) {
+      value = next;
+    },
+    disconnect: function () {
+      if (enhanced) enhanced = false;
+      return value;
+    },
+    get value() {
+      return value;
+    },
+    get enhanced() {
+      return enhanced;
+    }
+  };
+}
+
+if (typeof window !== "undefined") {
+  window.shouldVisitRow = shouldVisitRow;
+  window.popoverStateFor = popoverStateFor;
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    KEYCODES: KEYCODES,
+    shouldVisitRow: shouldVisitRow,
+    popoverStateFor: popoverStateFor,
+    createSelect: createSelect
+  };
+}
+JS
+
 cat > app/javascript/counter.js <<'JS'
 document.addEventListener("click", function (event) {
   var button = event.target.closest("[data-counter-step]");
@@ -132,11 +234,24 @@ cat > package.json <<'JSON'
   "name": "oubliette-playground",
   "private": true,
   "scripts": {
-    "test": "jest spec/javascript"
+    "test": "npm run test:jest && npm run test:jasmine",
+    "test:jest": "jest spec/javascript",
+    "test:jasmine": "jasmine --config=jasmine.json"
   },
   "devDependencies": {
+    "jasmine": "^5.5.0",
     "jest": "^29.7.0"
   }
+}
+JSON
+
+# jasmine keeps its spec directory in its own config file rather than in
+# package.json, which is why oubliette has a writer for it.
+cat > jasmine.json <<'JSON'
+{
+  "spec_dir": "spec/jasmine",
+  "spec_files": ["**/*[sS]pec.js"],
+  "random": false
 }
 JSON
 
@@ -181,6 +296,8 @@ Dir[File.join(TestPaths.dir("support", "spec/support"), "**", "*.rb")].sort.each
 VCR.configure do |config|
   config.cassette_library_dir = TestPaths.dir("vcr", "spec/vcr_cassettes").to_s
   config.hook_into :webmock
+  # Capybara talks to a server of its own; VCR must not intercept that.
+  config.ignore_localhost = true
 end
 
 # An example's type comes from the directory it sits in. Oubliette re-registers
@@ -191,7 +308,6 @@ RSpec.configure(&:infer_spec_type_from_file_location!)
 RSpec.configure do |config|
   config.include FactoryBot::Syntax::Methods
   config.include RestockHelpers
-  config.before(:each, type: :system) { driven_by :rack_test }
 
   # Minitest commits its fixtures to the test database and leaves them there, so
   # a suite that creates a "Hardware" category would find two of them the moment
@@ -238,6 +354,154 @@ FactoryBot.define do
     quantity { 10 }
     available { true }
     category
+  end
+end
+RUBY
+
+# ---------- capybara drivers ----------
+cat > spec/support/webdrivers.rb <<'RUBY'
+# Adapted from administrate's own spec/support/webdrivers.rb. Specs tagged :js
+# get a real browser, so the engine's stimulus controllers actually run.
+#
+# Administrate pins Capybara.server to webrick, which ruby 3.4 no longer bundles;
+# capybara's default is puma, which this application already runs.
+require "selenium/webdriver"
+
+Capybara.register_driver :headless_chrome do |app|
+  options = ::Selenium::WebDriver::Chrome::Options.new
+  options.add_argument "--headless=new"
+  options.add_argument "--window-size=1680,1050"
+  options.add_argument "--disable-gpu"
+  options.add_argument "--disable-dev-shm-usage"
+  options.add_argument "--no-sandbox"
+
+  Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
+end
+
+Capybara.javascript_driver = :headless_chrome
+
+RSpec.configure do |config|
+  config.before(:each, type: :system) { driven_by :rack_test }
+  config.before(:each, type: :system, js: true) { driven_by Capybara.javascript_driver }
+end
+RUBY
+
+# ---------- administrate, driven in a real browser ----------
+mkdir -p spec/system/admin
+
+cat > spec/system/admin/index_page_spec.rb <<'RUBY'
+require "rails_helper"
+
+# Ported from administrate's spec/features/index_page_spec.rb. Drives the
+# engine's table_controller: the whole row is clickable, but not when the click
+# landed on a link.
+RSpec.describe "admin widget index", type: :system do
+  it "renders the table without javascript" do
+    widget = create(:widget, name: "Bracket")
+
+    visit admin_widgets_path
+
+    expect(page).to have_css("table[data-controller='table']")
+    expect(page).to have_css("tr.js-table-row[data-url]")
+    expect(page).to have_content(widget.name)
+  end
+
+  it "follows the row to the show page", :js do
+    widget = create(:widget, name: "Bracket")
+
+    visit admin_widgets_path
+    find("tr.js-table-row[data-url='#{admin_widget_path(widget)}']").click
+
+    expect(page).to have_current_path(admin_widget_path(widget))
+    expect(page).to have_content("Bracket")
+  end
+
+  it "follows a link inside the row rather than the row itself", :js do
+    widget = create(:widget, name: "Bracket")
+
+    visit admin_widgets_path
+    within("tr.js-table-row") { click_on "Edit" }
+
+    expect(page).to have_current_path(edit_admin_widget_path(widget))
+  end
+end
+RUBY
+
+cat > spec/system/admin/edit_page_spec.rb <<'RUBY'
+require "rails_helper"
+
+# Ported from administrate's spec/features/edit_page_spec.rb. Drives the
+# engine's select_controller, which replaces the belongs_to select with a
+# selectize widget on connect and writes the value back on disconnect.
+RSpec.describe "admin widget form", type: :system do
+  it "renders a plain select without javascript" do
+    create(:category, name: "Hardware")
+    widget = create(:widget)
+
+    visit edit_admin_widget_path(widget)
+
+    expect(page).to have_css("select[name='widget[category_id]']")
+  end
+
+  it "enhances the category select into a selectize dropdown", :js do
+    create(:category, name: "Hardware")
+    widget = create(:widget)
+
+    visit edit_admin_widget_path(widget)
+
+    expect(page).to have_css(".selectize-input")
+  end
+
+  it "selects a category through the dropdown and saves it", :js do
+    hardware = create(:category, name: "Hardware")
+    create(:category, name: "Tooling")
+    widget = create(:widget, category: hardware)
+
+    visit edit_admin_widget_path(widget)
+    # selectize renders its dropdown at the end of body, not inside the field,
+    # so the option is looked up from the page rather than within the wrapper.
+    find(".field-unit--belongs-to .selectize-input").click
+    find(".option", text: "Tooling").click
+    click_on "Update Widget"
+
+    expect(page).to have_content("Tooling")
+    expect(widget.reload.category.name).to eq("Tooling")
+  end
+end
+RUBY
+
+cat > spec/system/admin/search_spec.rb <<'RUBY'
+require "rails_helper"
+
+# Ported from administrate's spec/features/search_spec.rb. The filter tooltip is
+# the engine's tooltip_controller, driving the native popover API.
+RSpec.describe "admin widget search", type: :system do
+  it "finds a widget by name" do
+    create(:widget, name: "Bracket")
+    create(:widget, name: "Grommet")
+
+    visit admin_widgets_path(search: "Bracket")
+
+    expect(page).to have_content("Bracket")
+    expect(page).not_to have_content("Grommet")
+  end
+
+  it "shows the filter tooltip button" do
+    visit admin_widgets_path
+
+    expect(page).to have_css("[data-controller='tooltip']")
+  end
+
+  it "opens the popover on hover and closes it again", :js do
+    visit admin_widgets_path
+
+    expect(page).to have_css("[data-tooltip-target='popover']", visible: :hidden)
+
+    find("[data-tooltip-target='tooltip']").hover
+    expect(page).to have_css("[data-tooltip-target='popover']", visible: :visible)
+
+    find("h1, .main-content__page-title", match: :first).hover
+    expect(page).to have_css("[data-tooltip-target='popover']", visible: :hidden)
   end
 end
 RUBY
@@ -494,6 +758,149 @@ describe("totalQuantity", () => {
 });
 JS
 
+cat > spec/javascript/admin_behaviours.test.js <<'JS'
+const path = require("path");
+const {
+  KEYCODES,
+  shouldVisitRow,
+  popoverStateFor,
+  createSelect
+} = require(path.join(process.cwd(), "app/javascript/admin_behaviours"));
+
+// Translated from administrate's spec/features/index_page_spec.rb
+describe("shouldVisitRow", () => {
+  const row = { type: "click", dataUrl: "/admin/widgets/1" };
+
+  test("follows a clicked row", () => expect(shouldVisitRow(row)).toBe(true));
+  test("follows on space", () =>
+    expect(shouldVisitRow({ keyCode: KEYCODES.space, dataUrl: "/x" })).toBe(true));
+  test("follows on enter", () =>
+    expect(shouldVisitRow({ keyCode: KEYCODES.enter, dataUrl: "/x" })).toBe(true));
+  test("ignores other keys", () =>
+    expect(shouldVisitRow({ keyCode: 27, dataUrl: "/x" })).toBe(false));
+  test("defers to a link inside the row", () =>
+    expect(shouldVisitRow({ ...row, targetIsLink: true })).toBe(false));
+  test("does not navigate while text is selected", () =>
+    expect(shouldVisitRow({ ...row, selectionLength: 12 })).toBe(false));
+  test("does nothing without a url", () =>
+    expect(shouldVisitRow({ type: "click" })).toBe(false));
+});
+
+// Translated from administrate's spec/features/search_spec.rb tooltip coverage
+describe("popoverStateFor", () => {
+  test("opens on mouseenter", () => expect(popoverStateFor("mouseenter", "closed")).toBe("open"));
+  test("closes on mouseleave", () => expect(popoverStateFor("mouseleave", "open")).toBe("closed"));
+  test("leaves other events alone", () => expect(popoverStateFor("click", "open")).toBe("open"));
+});
+
+// Translated from administrate's spec/features/edit_page_spec.rb
+describe("createSelect", () => {
+  test("keeps its value through enhancement and teardown", () => {
+    const select = createSelect("hardware");
+    select.connect();
+    select.choose("tooling");
+    expect(select.disconnect()).toBe("tooling");
+    expect(select.value).toBe("tooling");
+  });
+
+  test("can be connected twice without losing the value", () => {
+    const select = createSelect("hardware");
+    select.connect();
+    select.connect();
+    expect(select.enhanced).toBe(true);
+    expect(select.value).toBe("hardware");
+  });
+
+  test("can be disconnected twice", () => {
+    const select = createSelect("hardware");
+    select.connect();
+    select.disconnect();
+    expect(() => select.disconnect()).not.toThrow();
+    expect(select.enhanced).toBe(false);
+  });
+});
+JS
+
+mkdir -p spec/jasmine
+cat > spec/jasmine/admin_behaviours_spec.js <<'JS'
+const path = require("path");
+const {
+  KEYCODES,
+  shouldVisitRow,
+  popoverStateFor,
+  createSelect
+} = require(path.join(process.cwd(), "app/javascript/admin_behaviours"));
+
+// The same coverage as the jest suite, in jasmine. Duplication is the point:
+// both runners have to keep working once oubliette has moved them apart.
+describe("shouldVisitRow", function () {
+  it("follows a clicked row", function () {
+    expect(shouldVisitRow({ type: "click", dataUrl: "/admin/widgets/1" })).toBe(true);
+  });
+
+  it("follows on space and enter", function () {
+    expect(shouldVisitRow({ keyCode: KEYCODES.space, dataUrl: "/x" })).toBe(true);
+    expect(shouldVisitRow({ keyCode: KEYCODES.enter, dataUrl: "/x" })).toBe(true);
+  });
+
+  it("defers to a link inside the row", function () {
+    expect(shouldVisitRow({ type: "click", dataUrl: "/x", targetIsLink: true })).toBe(false);
+  });
+
+  it("does not navigate while text is selected", function () {
+    expect(shouldVisitRow({ type: "click", dataUrl: "/x", selectionLength: 4 })).toBe(false);
+  });
+
+  it("does nothing without a url", function () {
+    expect(shouldVisitRow({ type: "click" })).toBe(false);
+  });
+});
+
+describe("popoverStateFor", function () {
+  it("opens on mouseenter", function () {
+    expect(popoverStateFor("mouseenter", "closed")).toBe("open");
+  });
+
+  it("closes on mouseleave", function () {
+    expect(popoverStateFor("mouseleave", "open")).toBe("closed");
+  });
+});
+
+describe("createSelect", function () {
+  it("keeps its value through enhancement and teardown", function () {
+    const select = createSelect("hardware");
+    select.connect();
+    select.choose("tooling");
+    expect(select.disconnect()).toBe("tooling");
+  });
+
+  it("survives a second connect", function () {
+    const select = createSelect("hardware");
+    select.connect();
+    select.connect();
+    expect(select.value).toBe("hardware");
+  });
+});
+JS
+
+cat > spec/jasmine/restock_spec.js <<'JS'
+const path = require("path");
+const { restockLevel, totalQuantity } = require(path.join(process.cwd(), "app/javascript/restock"));
+
+describe("restockLevel", function () {
+  it("is out at zero", function () { expect(restockLevel(0, 5)).toBe("out"); });
+  it("is low below the threshold", function () { expect(restockLevel(4, 5)).toBe("low"); });
+  it("is ok at the threshold", function () { expect(restockLevel(5, 5)).toBe("ok"); });
+  it("is unknown for nonsense", function () { expect(restockLevel("nine", 5)).toBe("unknown"); });
+});
+
+describe("totalQuantity", function () {
+  it("adds the quantities up", function () {
+    expect(totalQuantity([{ quantity: 3 }, { quantity: 4 }, {}])).toBe(7);
+  });
+});
+JS
+
 # ---------- simplecov, so coverage/ exists ----------
 ruby -e '
   path = "spec/spec_helper.rb"
@@ -523,7 +930,8 @@ run "cucumber" bundle exec cucumber --format progress
 run "minitest" bin/rails test
 # npm test, not a hardcoded path: oubliette rewrites the script in package.json,
 # so this keeps working after the javascript directory moves.
-run "jest"     npm test --silent
+run "jest"     npm run test:jest --silent
+run "jasmine"  npm run test:jasmine --silent
 
 echo
 if [ "$failed" -eq 0 ]; then echo "everything green"; else echo "something failed"; exit 1; fi
@@ -541,6 +949,7 @@ cat >> .gitignore <<'IGNORE'
 
 coverage/
 node_modules/
+tmp/capybara/
 IGNORE
 
 git add -A

@@ -18,6 +18,9 @@ module Oubliette
 
       def filename = "package.json"
 
+      # Which top-level keys can hold a path. Subclasses point at other files.
+      def keys = KEYS
+
       def render
         substitutions = javascript_substitutions
         return nil if substitutions.empty?
@@ -26,12 +29,12 @@ module Oubliette
         return nil if source.nil?
 
         parsed = JSON.parse(source)
-        KEYS.each { |key| parsed[key] = substitute(parsed[key], substitutions) if parsed.key?(key) }
+        keys.each { |key| parsed[key] = substitute(parsed[key], substitutions) if parsed.key?(key) }
         "#{JSON.pretty_generate(parsed)}\n"
       rescue JSON::ParserError
         nil
       end
-      private
+      protected
         def javascript_substitutions
           %w[jest jasmine vitest @playwright/test cypress karma].filter_map do |key|
             pairs = @manifest.pairs(only: key).reject(&:missing?)

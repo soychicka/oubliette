@@ -9,6 +9,7 @@ require_relative "config/rspec"
 require_relative "config/cucumber"
 require_relative "config/cucumber_env"
 require_relative "config/javascript"
+require_relative "config/jasmine"
 
 module Oubliette
   # Detect, describe, move, rewrite, record.

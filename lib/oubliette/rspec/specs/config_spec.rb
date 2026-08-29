@@ -105,3 +105,44 @@ RSpec.describe "config writers" do
     end
   end
 end
+
+RSpec.describe Oubliette::Config::Jasmine do
+  def quiet = ->(_line) { }
+
+  def manifest_for(box) = Oubliette::Manifest.build(box.root).tap(&:save!)
+
+  it "moves the spec directory jasmine reads from its own config" do
+    box = sandbox(packages: %w[jasmine], dirs: %w[spec/jasmine],
+                  files: { "jasmine.json" => %({"spec_dir":"spec/jasmine","spec_files":["**/*[sS]pec.js"]}\n) })
+    described_class.new(box.root, manifest_for(box), logger: quiet).apply
+
+    expect(JSON.parse(box.read("jasmine.json"))["spec_dir"]).to eq("test/javascript/jasmine")
+  end
+
+  it "leaves the glob patterns alone" do
+    box = sandbox(packages: %w[jasmine], dirs: %w[spec/jasmine],
+                  files: { "jasmine.json" => %({"spec_dir":"spec/jasmine","spec_files":["**/*[sS]pec.js"]}\n) })
+    described_class.new(box.root, manifest_for(box), logger: quiet).apply
+
+    expect(JSON.parse(box.read("jasmine.json"))["spec_files"]).to eq([ "**/*[sS]pec.js" ])
+  end
+
+  it "restores the file on revert" do
+    original = %({"spec_dir":"spec/jasmine"}\n)
+    box = sandbox(packages: %w[jasmine], dirs: %w[spec/jasmine], files: { "jasmine.json" => original })
+    writer = described_class.new(box.root, manifest_for(box), logger: quiet)
+    writer.apply
+    writer.revert
+
+    expect(box.read("jasmine.json")).to eq(original)
+  end
+
+  it "is wired up by a full run" do
+    box = sandbox(packages: %w[jasmine], dirs: %w[spec/jasmine],
+                  files: { "jasmine.json" => %({"spec_dir":"spec/jasmine"}\n) })
+    box.run
+
+    expect(box).to be_exist("test/javascript/jasmine")
+    expect(JSON.parse(box.read("jasmine.json"))["spec_dir"]).to eq("test/javascript/jasmine")
+  end
+end

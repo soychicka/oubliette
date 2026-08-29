@@ -161,7 +161,7 @@ module Oubliette
           "spec/jasmine" => "test/javascript/jasmine",
           "jasmine" => "test/javascript/jasmine"
         },
-        config: %i[manual]
+        config: %i[jasmine]
       },
       {
         key: "vitest", label: "Vitest", ecosystem: :javascript,

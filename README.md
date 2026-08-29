@@ -143,6 +143,7 @@ because RSpec was installed first.
 | RSpec | `--default-path` in `.rspec`, regenerated from your original options |
 | Cucumber | feature paths substituted inside your existing `cucumber.yml` |
 | Jest and friends | path strings rewritten in `package.json`, through a JSON round trip |
+| Jasmine | `spec_dir` rewritten in `jasmine.json`, which is where jasmine keeps it |
 | Rails fixtures | `ActiveSupport::TestCase.fixture_paths`, overridden as a reader from the railtie, because `rails/test_help` appends the default path from a hook that runs later |
 | FactoryBot | `FactoryBot.definition_file_paths` |
 | VCR | `cassette_library_dir` |
@@ -153,6 +154,10 @@ The file-based ones are backed up to `.oubliette/backups/` before they are
 touched, and rollback is a restore.
 
 ## What it does not do
+
+Vitest, Playwright, Cypress and Karma are detected and moved, but their config
+files are not rewritten -- the plan reports them so you can update them by hand.
+RSpec, Cucumber, Jest and Jasmine are handled.
 
 Oubliette rewrites framework configuration and repairs ruby's `require_relative`
 when a directory changes depth. It does not rewrite application code, and it does
@@ -190,6 +195,16 @@ They are packaged with the gem, so they run three ways:
 
 Every example builds a real project in a temporary directory, with a real git
 repository, and runs the real mover against it.
+
+`bin/playground` builds a durable application to try the gem against by hand: two
+CRUD models, javascript with both unit-testable logic and a clickable counter,
+the Administrate engine with its own stimulus controllers, and one passing suite
+per framework -- rspec model, request and system specs, three of Administrate's
+own `:js` specs ported onto the local models and driven in headless Chrome,
+cucumber scenarios, minitest with fixtures, a spec in the legacy `test/unit`
+location, a VCR cassette, and the same javascript behaviour covered twice, once
+in jest and once in jasmine. Oubliette is left commented out in its Gemfile so
+the install can be demonstrated.
 
 `bin/e2e /some/build/dir` goes further: it generates a brand new Rails
 application with RSpec, Cucumber, Minitest, FactoryBot, Capybara, VCR, SimpleCov
