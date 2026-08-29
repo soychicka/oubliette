@@ -77,6 +77,7 @@ module Oubliette
       mover = Mover.new(@root, dry_run: @dry_run, logger: @log)
 
       @out.puts(@dry_run ? "would roll back" : "rolling back")
+      mover.protect(ledger.pairs(only: key).map(&:origin))
       restore_configs(manifest, key)
 
       ledger.pairs(only: key).each do |pair|
@@ -108,6 +109,7 @@ module Oubliette
       def move(manifest, mover)
         ledger = manifest.ledger
         work = manifest.pairs.reject { |pair| pair.settled? || pair.canonical? }
+        mover.protect(manifest.pairs.flat_map { |pair| [ pair.origin, pair.current ] })
 
         @out.puts
         @out.puts(@dry_run ? "would move" : "moving")

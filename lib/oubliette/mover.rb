@@ -18,6 +18,14 @@ module Oubliette
       @root = Pathname.new(root)
       @dry_run = dry_run
       @log = logger || ->(line) { puts line }
+      @protected = []
+    end
+
+    # Directories the run still intends to move. Emptying spec/ by extracting
+    # spec/javascript out of it does not make spec/ rubbish -- it is the next
+    # thing on the list.
+    def protect(paths)
+      @protected = paths.compact.uniq
     end
 
     def dry_run? = @dry_run
@@ -85,6 +93,7 @@ module Oubliette
         git_mv(source, target) || FileUtils.mv(source.to_s, target.to_s)
       end
 
+      prune_empty_ancestors(from)
       repaired = Requires.new(@root).repair(from: from, to: to, files: ruby_files)
       repaired.each { |file| @log.call("    fixed require_relative in #{file}") }
       stage(from, to)
@@ -217,6 +226,21 @@ module Oubliette
       end
 
       def relative(path) = Pathname.new(path).relative_path_from(@root).to_s
+
+      # Moving test/javascript/jest out of test/javascript leaves the parent
+      # standing and empty. Left there it is found again on the next run, and
+      # the catalog -- which knows test/javascript as jest's default home --
+      # proposes folding it into its own child. Take it away with its contents.
+      def prune_empty_ancestors(from)
+        dir = @root.join(from).parent
+
+        while dir.to_s.start_with?(@root.to_s) && dir != @root && dir.directory? && dir.children.empty?
+          break if @protected.include?(relative(dir))
+
+          dir.rmdir
+          dir = dir.parent
+        end
+      end
 
       def relative_ruby_files(source)
         source.glob("**/*.{rb,rake}").map { |file| file.relative_path_from(source).to_s }

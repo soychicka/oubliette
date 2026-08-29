@@ -89,3 +89,49 @@ RSpec.describe "#{Oubliette::Ledger} nested pairs" do
     expect(box).to be_exist("test/rspec/system")
   end
 end
+
+RSpec.describe "migrating a second time after a rollback" do
+  # Rollback used to leave the emptied parent behind, and the next run found
+  # test/javascript sitting there and tried to fold it into test/javascript/jest.
+  it "does not leave an emptied parent directory behind" do
+    box = sandbox(packages: %w[jest], dirs: %w[spec/javascript])
+    box.run
+    box.runner.rollback
+
+    expect(box).to be_exist("spec/javascript")
+    expect(box).not_to be_exist("test/javascript")
+  end
+
+  it "migrates cleanly all over again" do
+    box = sandbox(gems: %w[rspec-rails], packages: %w[jest], dirs: %w[spec/models spec/javascript])
+    box.run
+    box.runner.rollback
+    box.commit("rolled back")
+
+    expect { box.run }.not_to raise_error
+    expect(box).to be_exist("test/javascript/jest")
+    expect(box).not_to be_exist("test/javascript/jest/jest")
+  end
+
+  it "survives three round trips" do
+    box = sandbox(gems: %w[rspec-rails], packages: %w[jest], dirs: %w[spec/models spec/javascript])
+
+    3.times do
+      box.run
+      box.commit("migrated")
+      box.runner.rollback
+      box.commit("rolled back")
+    end
+
+    expect(box).to be_exist("spec/models")
+    expect(box).to be_exist("spec/javascript")
+  end
+
+  it "ignores a directory that has nothing in it" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    FileUtils.mkdir_p(box.root.join("features"))
+    box.commit("an empty features directory")
+
+    expect(Oubliette::Manifest.build(box.root).pairs.map(&:origin)).not_to include("features")
+  end
+end

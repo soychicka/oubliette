@@ -217,6 +217,7 @@ module Oubliette
       # its own child, forever.
       def relevant?(key, origin, oubliette)
         return false if nests_inside_itself?(origin, oubliette)
+        return false if empty_directory?(origin)
         return false if ledger.current(key, origin)
         return false if ledger.pairs.any? { |pair|
           pair.current == origin || pair.current.to_s.start_with?("#{origin}/")
@@ -230,6 +231,15 @@ module Oubliette
       # the catalog would propose folding it into its own child. This is checked
       # structurally rather than against rollback.yml, because a project whose
       # ledger has been lost still must not eat its own directory.
+      # An empty directory has nothing to move, and proposing it only invites
+      # the kind of trouble a leftover parent causes.
+      # FNM_DOTMATCH because a directory holding nothing but a .keep is not
+      # empty: the placeholder is a tracked file, and moving it is the point.
+      def empty_directory?(origin)
+        dir = @root.join(origin)
+        dir.directory? && dir.glob("**/*", File::FNM_DOTMATCH).none?(&:file?)
+      end
+
       def nests_inside_itself?(origin, oubliette)
         oubliette.start_with?("#{origin}/") && @root.join(oubliette).exist?
       end
