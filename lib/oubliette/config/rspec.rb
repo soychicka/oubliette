@@ -5,33 +5,41 @@ require_relative "writer"
 module Oubliette
   module Config
     # Points the `rspec` command at the relocated spec tree.
-    #
-    # .rspec cannot carry comments -- RSpec splits the file on whitespace and
-    # feeds every token to its option parser -- so the file is regenerated from
-    # the pre-oubliette original each time rather than annotated in place.
     class Rspec < Writer
       register :rspec
 
+      DEFAULTS = "--require spec_helper\n--color\n--format progress\n"
+
       def filename = ".rspec"
 
-      def render
+      def render(current)
         path = destination("rspec-rails")
         return nil if path.nil?
 
-        options = source_options.reject { |option| option.start_with?("--default-path") }
-        (options + [ "--default-path #{path}" ]).join("\n") + "\n"
+        base = ManagedBlock.unwrap(current).to_s
+        base = DEFAULTS if base.strip.empty?
+        existing = base.lines.find { |line| line.strip.start_with?("--default-path") }
+
+        block = ManagedBlock.wrap(
+          reason: reason(path, existing),
+          original: existing ? [ existing.strip ] : [],
+          replacement: [ "--default-path #{path}" ]
+        )
+
+        existing ? base.sub(existing, block) : append(base, block)
       end
       private
-        def source_options
-          source = backup_path.file? ? backup_path : @root.join(filename)
-          return default_options unless source.file?
-          return default_options if source.read.strip == Writer::ABSENT
-
-          source.read.lines.map(&:strip).reject(&:empty?)
+        def reason(path, existing)
+          [
+            "the spec tree moved to #{path}, and rspec reads from a single default path.",
+            existing ? "the `was:` line below is yours, commented out rather than deleted." :
+                       "there was no default path here before, so nothing of yours was replaced.",
+            "`rake oubliette:rollback` removes this block and leaves the rest of the file alone."
+          ]
         end
 
-        def default_options
-          [ "--require spec_helper", "--color", "--format progress" ]
+        def append(base, block)
+          base.empty? || base.end_with?("\n") ? base + block : "#{base}\n#{block}"
         end
     end
   end

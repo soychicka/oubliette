@@ -150,8 +150,34 @@ because RSpec was installed first.
 | SimpleCov | `coverage_dir` |
 | Capybara | `save_path` for screenshots |
 
-The file-based ones are backed up to `.oubliette/backups/` before they are
-touched, and rollback is a restore.
+## Your edits are never overwritten
+
+No config file is ever replaced wholesale. Oubliette reads what is on disk now,
+changes only the lines it is responsible for, and comments the original out
+rather than deleting it:
+
+```
+--require spec_helper
+# >>> oubliette >>>
+# the spec tree moved to test/rspec, and rspec reads from a single default path.
+# the `was:` line below is yours, commented out rather than deleted.
+# `rake oubliette:rollback` removes this block and leaves the rest of the file alone.
+# was: --default-path spec
+--default-path test/rspec
+# <<< oubliette <<<
+--color
+```
+
+Rolling back uncomments the `was:` line and drops the rest of the block.
+Everything outside it is never read and never rewritten, so an edit made after
+the migration survives -- which a design that restored a snapshot taken before it
+could not manage.
+
+JSON has nowhere to put a comment, so `package.json` and `jasmine.json` are
+handled differently: the exact quoted strings that name a relocated directory are
+replaced where they stand, and rollback runs the same substitution backwards.
+Formatting, key order and every setting oubliette does not manage are left byte
+for byte as they were.
 
 ## What it does not do
 

@@ -8,49 +8,38 @@ module Oubliette
     #
     # cucumber/rails.rb works out the application root by going two levels up
     # from whichever env.rb required it, which is correct only while the
-    # features tree sits directly under the project root. Moving it anywhere
-    # else makes cucumber-rails look for config/environment in the wrong place,
-    # so env.rb is given a line that finds the root by looking for it.
+    # features tree sits directly under the project root.
     class CucumberEnv < Writer
       register :cucumber_env
-
-      MARKER = "# oubliette: pin the application root"
 
       def filename
         destination = destination("cucumber-rails")
         destination && "#{destination}/support/env.rb"
       end
 
-      def render
-        source = original
-        return nil if source.nil?
-        return source if source.include?(MARKER)
-        return source if destination("cucumber-rails") == "features"
+      def render(current)
+        return nil if current.nil?
 
-        shim + source
+        base = ManagedBlock.unwrap(current).to_s
+        path = destination("cucumber-rails")
+        return base if path.nil? || path == "features"
+
+        shim + base
       end
       private
         def shim
-          <<~RUBY
-            #{MARKER} -- cucumber-rails otherwise infers it from this file's depth.
-            ENV["RAILS_ROOT"] ||= begin
-              dir = __dir__
-              dir = File.dirname(dir) until File.file?(File.join(dir, "config", "environment.rb")) || dir == "/"
-              dir
-            end
-
-          RUBY
-        end
-
-        def original
-          name = filename
-          return nil if name.nil?
-
-          source = backup_path.file? ? backup_path : @root.join(name)
-          return nil unless source.file?
-
-          contents = source.read
-          contents == Writer::ABSENT ? nil : contents
+          ManagedBlock.wrap(
+            reason: [ "cucumber-rails infers the application root from this file's depth,",
+                      "which moving features/ changed. Nothing below this block was touched." ],
+            replacement: [
+              'ENV["RAILS_ROOT"] ||= begin',
+              "  dir = __dir__",
+              '  dir = File.dirname(dir) until File.file?(File.join(dir, "config", "environment.rb")) || dir == "/"',
+              "  dir",
+              "end",
+              ""
+            ]
+          )
         end
     end
   end

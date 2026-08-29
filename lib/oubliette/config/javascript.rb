@@ -5,12 +5,13 @@ require_relative "writer"
 
 module Oubliette
   module Config
-    # Rewrites the JavaScript runners' paths.
+    # Rewrites the paths the javascript runners keep in JSON.
     #
-    # Both jest.config.js and the jest/scripts blocks in package.json refer to
-    # their directories as plain strings, so the same path substitution works on
-    # either. package.json is edited through a JSON round trip on the keys that
-    # can hold paths, never as raw text, so a stray match cannot corrupt it.
+    # JSON cannot carry a comment, so there is nowhere to park the original
+    # line. Instead of rewriting the file, the exact quoted strings that name a
+    # relocated directory are replaced where they stand -- formatting,
+    # key order, and every setting oubliette does not manage are left byte for
+    # byte as they were. Undoing the edit is the same substitution backwards.
     class Javascript < Writer
       register :jest
 
@@ -21,20 +22,22 @@ module Oubliette
       # Which top-level keys can hold a path. Subclasses point at other files.
       def keys = KEYS
 
-      def render
+      def render(current)
+        return nil if current.nil?
+
         substitutions = javascript_substitutions
         return nil if substitutions.empty?
 
-        source = original
-        return nil if source.nil?
-
-        parsed = JSON.parse(source)
-        keys.each { |key| parsed[key] = substitute(parsed[key], substitutions) if parsed.key?(key) }
-        "#{JSON.pretty_generate(parsed)}\n"
-      rescue JSON::ParserError
-        nil
+        rewrite(current, substitutions)
       end
       protected
+        def restore(current)
+          substitutions = javascript_substitutions.map(&:reverse)
+          return current if substitutions.empty?
+
+          rewrite(current, substitutions)
+        end
+
         def javascript_substitutions
           %w[jest jasmine vitest @playwright/test cypress karma].filter_map do |key|
             pairs = @manifest.pairs(only: key).reject(&:missing?)
@@ -43,25 +46,41 @@ module Oubliette
             pairs.map { |pair| [ pair.origin, pair.oubliette ] }
           end.flatten(1).reject { |origin, oubliette| origin == oubliette }
         end
+      private
+        # Only the strings found inside the keys this writer manages are
+        # touched, and each is replaced as a whole quoted value, so nothing else
+        # in the file can be caught by accident.
+        def rewrite(source, substitutions)
+          parsed = JSON.parse(source)
+          replacements = {}
 
-        def substitute(node, substitutions)
-          case node
-          when Hash then node.transform_values { |value| substitute(value, substitutions) }
-          when Array then node.map { |value| substitute(value, substitutions) }
-          when String
-            substitutions.reduce(node) do |text, (from, to)|
-              text.gsub(/(?<![\w\/.-])#{Regexp.escape(from)}(?=[\s\/'"]|$)/, to)
+          keys.each do |key|
+            next unless parsed.key?(key)
+
+            strings_in(parsed[key]).each do |value|
+              updated = substitute(value, substitutions)
+              replacements[value] = updated unless updated == value
             end
-          else node
+          end
+
+          replacements.reduce(source) { |text, (from, to)| text.gsub(%("#{from}"), %("#{to}")) }
+        rescue JSON::ParserError
+          source
+        end
+
+        def strings_in(node)
+          case node
+          when Hash then node.values.flat_map { |value| strings_in(value) }
+          when Array then node.flat_map { |value| strings_in(value) }
+          when String then [ node ]
+          else []
           end
         end
 
-        def original
-          source = backup_path.file? ? backup_path : @root.join(filename)
-          return nil unless source.file?
-
-          contents = source.read
-          contents == Writer::ABSENT ? nil : contents
+        def substitute(text, substitutions)
+          substitutions.reduce(text) do |value, (from, to)|
+            value.gsub(%r{(?<![\w/.-])#{Regexp.escape(from)}(?=[\s/'"]|$)}, to)
+          end
         end
     end
   end

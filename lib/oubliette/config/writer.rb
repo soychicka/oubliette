@@ -2,36 +2,26 @@
 
 require "fileutils"
 require "pathname"
+require_relative "managed_block"
 
 module Oubliette
   module Config
-    # Base for the writers that rewrite a framework's own config file so its
-    # default command finds the relocated directories.
+    # Base for the writers that tell a framework where its directories went.
     #
-    # Every writer backs the original file up before touching it, because the
-    # formats involved (.rspec in particular) cannot carry a comment marker to
-    # delimit a managed region. Restoring the backup is therefore the whole of
-    # rollback.
+    # No writer ever replaces a file wholesale. Each one reads what is on disk
+    # now -- not a snapshot taken before the first migration -- and changes only
+    # the lines it is responsible for, leaving the developer's own edits in
+    # place whether they were made before the move or long after it.
     class Writer
-      BACKUP_DIR = ".oubliette/backups"
-      ABSENT = "oubliette:file-did-not-exist"
-
       class << self
-        def registry
-          @registry ||= {}
-        end
+        def registry = @registry ||= {}
 
-        def register(name)
-          Writer.registry[name] = self
-        end
+        def register(name) = Writer.registry[name] = self
 
-        def for(name)
-          Writer.registry[name]
-        end
+        def for(name) = Writer.registry[name]
 
         def build(name, root, manifest, **options)
-          klass = Writer.for(name)
-          klass&.new(root, manifest, **options)
+          Writer.for(name)&.new(root, manifest, **options)
         end
       end
 
@@ -42,77 +32,73 @@ module Oubliette
         @log = logger || ->(line) { puts line }
       end
 
-      def filename
-        raise NotImplementedError
-      end
+      def filename = raise NotImplementedError
 
-      # Returns nil when the framework's directories are missing from both the
-      # old and the new location, which disables the config rather than pointing
-      # it at a path that is not there.
-      def render
-        raise NotImplementedError
-      end
+      # Returns the new contents given what is on disk, or nil to do nothing.
+      def render(_current) = raise NotImplementedError
 
       def apply
         return :skipped if filename.nil?
 
-        contents = render
-        if contents.nil?
+        current = read
+        updated = render(current)
+        if updated.nil?
           @log.call("  #{filename}: skipped, nothing to point at")
           return :skipped
         end
+        return :unchanged if updated == current
 
-        target = @root.join(filename)
-        return :unchanged if target.file? && target.read == contents
-
-        @log.call("  #{filename}: rewritten")
-        return :written if @dry_run
-
-        back_up(target)
-        FileUtils.mkdir_p(target.dirname)
-        target.write(contents)
+        @log.call("  #{filename}: #{current.nil? ? 'written' : 'updated in place'}")
+        write(updated)
         :written
       end
 
       def revert
         return :unchanged if filename.nil?
 
-        target = @root.join(filename)
-        backup = backup_path
-        return :unchanged unless backup.file?
+        current = read
+        return :unchanged if current.nil?
 
-        @log.call("  #{filename}: restored")
-        return :restored if @dry_run
+        updated = restore(current)
+        return :unchanged if updated == current
 
-        saved = backup.read
-        if saved == ABSENT
-          target.delete if target.exist?
+        if updated.strip.empty?
+          @log.call("  #{filename}: removed, it was written by oubliette")
+          remove
         else
-          target.write(saved)
+          @log.call("  #{filename}: original restored, your other edits kept")
+          write(updated)
         end
-        backup.delete
         :restored
       end
-
       private
+        attr_reader :root, :manifest
 
-      attr_reader :root, :manifest
+        # Undoing an edit is uncommenting what was commented out. Anything the
+        # developer added since is outside the block and simply passes through.
+        def restore(current) = ManagedBlock.unwrap(current)
 
-      def destination(key)
-        @manifest.destination(key)
-      end
+        def destination(key) = @manifest.destination(key)
 
-      def back_up(target)
-        backup = backup_path
-        return if backup.file?
+        def read
+          target = @root.join(filename)
+          target.file? ? target.read : nil
+        end
 
-        FileUtils.mkdir_p(backup.dirname)
-        backup.write(target.file? ? target.read : ABSENT)
-      end
+        def write(contents)
+          return if @dry_run
 
-      def backup_path
-        @root.join(BACKUP_DIR, filename.gsub("/", "__"))
-      end
+          target = @root.join(filename)
+          FileUtils.mkdir_p(target.dirname)
+          target.write(contents)
+        end
+
+        def remove
+          return if @dry_run
+
+          target = @root.join(filename)
+          target.delete if target.exist?
+        end
     end
   end
 end

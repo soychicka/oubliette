@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 RSpec.describe "config writers" do
+  # What the framework actually reads: everything that is not commented out.
+  def active(text)
+    text.lines.reject { |line| line.strip.start_with?("#") }.map(&:chomp).reject(&:empty?)
+  end
   def manifest_for(box)
     Oubliette::Manifest.build(box.root).tap(&:save!)
   end
@@ -14,8 +18,7 @@ RSpec.describe "config writers" do
       box = sandbox(gems: %w[rspec-rails], dirs: %w[spec], files: { ".rspec" => "--color\n--format doc\n" })
       described_class.new(box.root, manifest_for(box), logger: quiet).apply
 
-      expect(box.read(".rspec").lines.map(&:chomp))
-        .to eq([ "--color", "--format doc", "--default-path test/rspec" ])
+      expect(active(box.read(".rspec"))).to eq([ "--color", "--format doc", "--default-path test/rspec" ])
     end
 
     it "replaces an existing default path rather than adding a second" do
@@ -23,7 +26,9 @@ RSpec.describe "config writers" do
                     files: { ".rspec" => "--default-path spec\n--color\n" })
       described_class.new(box.root, manifest_for(box), logger: quiet).apply
 
-      expect(box.read(".rspec").scan("--default-path").length).to eq(1)
+      contents = box.read(".rspec")
+      expect(active(contents).grep(/--default-path/)).to eq([ "--default-path test/rspec" ])
+      expect(contents).to include("# was: --default-path spec")
     end
 
     it "restores the original on revert" do
@@ -52,10 +57,12 @@ RSpec.describe "config writers" do
                     files: { "cucumber.yml" => original })
       described_class.new(box.root, manifest_for(box), logger: quiet).apply
 
-      expect(box.read("cucumber.yml")).to eq(
+      contents = box.read("cucumber.yml")
+      expect(active(contents)).to eq([
         "default: -r test/cucumber/features/support -r test/cucumber/features/step_definitions " \
-        "--strict test/cucumber/features\n"
-      )
+        "--strict test/cucumber/features"
+      ])
+      expect(contents).to include("# was: #{original.chomp}")
     end
 
     it "leaves a profile that already says what to require alone" do
@@ -64,7 +71,7 @@ RSpec.describe "config writers" do
                     files: { "cucumber.yml" => original })
       described_class.new(box.root, manifest_for(box), logger: quiet).apply
 
-      expect(box.read("cucumber.yml").scan("-r ").length).to eq(1)
+      expect(active(box.read("cucumber.yml")).first.scan("-r ").length).to eq(1)
     end
 
     it "generates a default profile when the project has no cucumber.yml" do
@@ -79,8 +86,8 @@ RSpec.describe "config writers" do
                     files: { "cucumber.yml" => "default: --tags @features_only features\n" })
       described_class.new(box.root, manifest_for(box), logger: quiet).apply
 
-      expect(box.read("cucumber.yml"))
-        .to eq("default: -r test/cucumber/features --tags @features_only test/cucumber/features\n")
+      expect(active(box.read("cucumber.yml")))
+        .to eq([ "default: -r test/cucumber/features --tags @features_only test/cucumber/features" ])
     end
   end
 

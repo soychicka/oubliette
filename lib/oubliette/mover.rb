@@ -113,9 +113,10 @@ module Oubliette
     # their being uncommitted is never a reason to refuse to run.
     PLACEHOLDERS = %w[.keep .gitkeep].freeze
 
-    OWNED = [
-      Manifest::FILENAME, Ledger::FILENAME, Config::Writer::BACKUP_DIR.split("/").first
-    ].freeze
+    # ".oubliette" held the config backups older versions took before they
+    # learned to edit in place. Nothing writes it now, but a project that has
+    # one should not be told its tree is dirty because of it.
+    OWNED = [ Manifest::FILENAME, Ledger::FILENAME, ".oubliette" ].freeze
 
     # Kept public because the runner stages the config files it rewrites, which
     # is what lets a second run see a tree it still considers stable.

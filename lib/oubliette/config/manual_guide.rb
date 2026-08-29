@@ -22,7 +22,18 @@ module Oubliette
 
       def filename = "#{@entry.file}.oubliette.md"
 
-      def render
+      # The whole file is oubliette's, so a rollback removes it outright rather
+      # than trying to restore anything from inside it.
+      def revert
+        target = @root.join(filename)
+        return :unchanged unless target.file?
+
+        @log.call("  #{filename}: removed, the config it describes was never touched")
+        remove
+        :restored
+      end
+
+      def render(_current)
         <<~MARKDOWN
           # #{@entry.gem}: update `#{@entry.file}` by hand
 
