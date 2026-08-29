@@ -146,3 +146,36 @@ RSpec.describe Oubliette::Config::Jasmine do
     expect(JSON.parse(box.read("jasmine.json"))["spec_dir"]).to eq("test/javascript/jasmine")
   end
 end
+
+RSpec.describe "config oubliette will not rewrite" do
+  it "names the config file and the move it invalidates" do
+    box = sandbox(packages: %w[cypress], dirs: %w[cypress],
+                  files: { "cypress.config.js" => "module.exports = { e2e: { specPattern: 'cypress/**' } };\n" })
+    box.run
+
+    expect(box.log).to include("CONFIG YOU MUST UPDATE BY HAND")
+    expect(box.log).to include("cypress.config.js (cypress): cypress -> test/javascript/cypress")
+  end
+
+  it "leaves the file itself untouched" do
+    original = "module.exports = { e2e: { specPattern: 'cypress/**' } };\n"
+    box = sandbox(packages: %w[cypress], dirs: %w[cypress], files: { "cypress.config.js" => original })
+    box.run
+
+    expect(box.read("cypress.config.js")).to eq(original)
+  end
+
+  it "says nothing when the framework has no config file in the project" do
+    box = sandbox(packages: %w[cypress], dirs: %w[cypress])
+    box.run
+
+    expect(box.log).not_to include("CONFIG YOU MUST UPDATE BY HAND")
+  end
+
+  it "says nothing for a framework whose config oubliette does rewrite" do
+    box = sandbox(packages: %w[jest], dirs: %w[spec/javascript])
+    box.run
+
+    expect(box.log).not_to include("CONFIG YOU MUST UPDATE BY HAND")
+  end
+end

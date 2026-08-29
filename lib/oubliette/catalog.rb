@@ -10,6 +10,7 @@ module Oubliette
     ROOT = "test"
 
     # ecosystem  :ruby | :javascript
+    # manual_config  config files oubliette knows about but will not rewrite
     # gems       names looked for in Gemfile / Gemfile.lock
     # packages   names looked for in package.json dependencies
     # paths      directories whose mere presence proves the framework is in use
@@ -167,7 +168,7 @@ module Oubliette
         key: "vitest", label: "Vitest", ecosystem: :javascript,
         packages: %w[vitest], paths: %w[tests/unit],
         moves: { "tests/unit" => "test/javascript/vitest" },
-        config: %i[manual]
+        config: %i[manual], manual_config: %w[vitest.config.js vitest.config.ts vite.config.js vite.config.ts]
       },
       {
         key: "@playwright/test", label: "Playwright", ecosystem: :javascript,
@@ -177,19 +178,19 @@ module Oubliette
           "tests/e2e" => "test/javascript/playwright",
           "playwright" => "test/javascript/playwright"
         },
-        config: %i[manual]
+        config: %i[manual], manual_config: %w[playwright.config.js playwright.config.ts]
       },
       {
         key: "cypress", label: "Cypress", ecosystem: :javascript,
         packages: %w[cypress], paths: %w[cypress],
         moves: { "cypress" => "test/javascript/cypress" },
-        config: %i[manual]
+        config: %i[manual], manual_config: %w[cypress.config.js cypress.config.ts]
       },
       {
         key: "karma", label: "Karma", ecosystem: :javascript,
         packages: %w[karma], paths: %w[karma spec/karma],
         moves: { "karma" => "test/javascript/karma", "spec/karma" => "test/javascript/karma" },
-        config: %i[manual]
+        config: %i[manual], manual_config: %w[karma.conf.js karma.conf.ts]
       }
     ].freeze
 

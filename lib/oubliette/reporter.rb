@@ -19,6 +19,7 @@ module Oubliette
       heading(dry_run ? "oubliette dry run -- nothing will be written" : "oubliette")
       @manifest.gems.each { |key| gem_section(key) }
       strays
+      manual_configs
       warnings
       self
     end
@@ -48,6 +49,21 @@ module Oubliette
         @out.puts
         @out.puts("unclaimed test-shaped directories (disabled -- edit migrate.yml to include)")
         pending.each_key { |name| @out.puts("  #{name}") }
+      end
+
+      # These keep their paths in a javascript module rather than in JSON, so
+      # oubliette moves the directories and leaves the config alone. Saying
+      # nothing would let a suite quietly stop finding its own specs.
+      def manual_configs
+        manual = @manifest.manual_configs
+        return if manual.empty?
+
+        @out.puts
+        @out.puts("CONFIG YOU MUST UPDATE BY HAND -- oubliette does not rewrite these")
+        manual.each do |entry|
+          moves = entry.pairs.map { |pair| "#{pair.origin} -> #{pair.oubliette}" }.join(", ")
+          @out.puts("  #{entry.file} (#{entry.gem}): #{moves}")
+        end
       end
 
       def warnings

@@ -156,8 +156,10 @@ touched, and rollback is a restore.
 ## What it does not do
 
 Vitest, Playwright, Cypress and Karma are detected and moved, but their config
-files are not rewritten -- the plan reports them so you can update them by hand.
-RSpec, Cucumber, Jest and Jasmine are handled.
+files are not rewritten: those keep their paths in a javascript module rather
+than in JSON, and there is no round trip that cannot corrupt a module. The run
+prints them under "CONFIG YOU MUST UPDATE BY HAND", naming the file and the move
+that invalidated it. RSpec, Cucumber, Jest and Jasmine are rewritten for you.
 
 Oubliette rewrites framework configuration and repairs ruby's `require_relative`
 when a directory changes depth. It does not rewrite application code, and it does

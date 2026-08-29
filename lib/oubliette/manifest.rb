@@ -77,6 +77,24 @@ module Oubliette
 
     def missing = pairs.select(&:missing?)
 
+    # Frameworks whose directories oubliette moves but whose configuration it
+    # will not touch, because the paths live in a javascript module rather than
+    # in JSON. Only reported when the config file is really there.
+    ManualConfig = Data.define(:gem, :file, :pairs)
+
+    def manual_configs
+      @data["gems"].flat_map do |key, gem|
+        next [] unless gem["enabled"] && config_writers(key).include?(:manual)
+
+        moving = pairs(only: key).reject { |pair| pair.missing? || pair.canonical? }
+        next [] if moving.empty?
+
+        Array(Catalog.find(key)&.dig(:manual_config))
+          .select { |file| @root.join(file).file? }
+          .map { |file| ManualConfig.new(gem: key, file: file, pairs: moving) }
+      end
+    end
+
     def pending = pairs.select(&:pending?)
 
     # Where a framework's assets are meant to live. nil when every one of its
