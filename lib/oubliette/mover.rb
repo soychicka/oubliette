@@ -53,6 +53,17 @@ module Oubliette
       :reverted
     end
 
+    # What relocating would overwrite, without relocating anything. The runner
+    # asks this of every move before it makes the first one, so a collision
+    # stops the migration while the project is still whole.
+    def conflicts(from, to)
+      source = @root.join(from)
+      target = @root.join(to)
+      return [] unless source.directory? && target.directory?
+
+      collisions(source, target)
+    end
+
     def relocate(from, to)
       source = @root.join(from)
       target = @root.join(to)
@@ -64,6 +75,7 @@ module Oubliette
       ruby_files = source.directory? ? relative_ruby_files(source) : []
 
       raise Error, "#{from} does not exist" unless source.exist?
+      raise Error, "refusing to move #{from} into its own subdirectory #{to}" if to.start_with?("#{from}/")
       raise Error, "#{to} exists and is a file" if target.file?
 
       if target.directory?
@@ -129,6 +141,19 @@ module Oubliette
       end
     end
     private
+      def collisions(source, target)
+        source.children.flat_map do |child|
+          destination = target.join(child.basename)
+          if child.directory? && destination.directory?
+            collisions(child, destination)
+          elsif destination.exist? && !placeholder?(child)
+            [ relative(destination) ]
+          else
+            []
+          end
+        end
+      end
+
       def merge_into(source, target)
         source.children.each do |child|
           destination = target.join(child.basename)

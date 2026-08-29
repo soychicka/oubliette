@@ -101,3 +101,34 @@ RSpec.describe Oubliette::Manifest do
     expect(manifest.destination("factory_bot_rails")).to eq("test/data/factories")
   end
 end
+
+RSpec.describe "#{Oubliette::Manifest} self-nesting" do
+  # test/javascript is jest's default home and test/javascript/jest is where it
+  # lands, so a second look at an already-migrated project must not propose
+  # folding the parent into its own child.
+  it "does not propose a move into its own subdirectory once the move has happened" do
+    box = sandbox(packages: %w[jest], dirs: %w[spec/javascript])
+    box.run
+
+    expect(box.manifest.pairs.map(&:origin)).not_to include("test/javascript")
+  end
+
+  it "still refuses when rollback.yml has been lost" do
+    box = sandbox(packages: %w[jest], dirs: %w[spec/javascript])
+    box.run
+    FileUtils.rm(box.root.join("rollback.yml"))
+    box.commit("lost the ledger")
+
+    expect(Oubliette::Manifest.build(box.root).pairs.map(&:origin)).not_to include("test/javascript")
+    expect { box.run }.not_to raise_error
+    expect(box).not_to be_exist("test/javascript/jest/jest")
+  end
+
+  it "refuses outright at the mover, whatever the manifest says" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
+    mover = Oubliette::Mover.new(box.root, logger: ->(_line) { })
+
+    expect { mover.relocate("spec", "spec/inner") }
+      .to raise_error(Oubliette::Error, /into its own subdirectory/)
+  end
+end

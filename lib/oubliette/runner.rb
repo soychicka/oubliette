@@ -108,17 +108,45 @@ module Oubliette
         @out.puts(@dry_run ? "would move" : "moving")
         @out.puts("  nothing -- migrate.yml and rollback.yml already agree") if work.empty?
 
-        work.each do |pair|
-          if pair.missing?
-            @out.puts("  #{pair.gem}: #{pair.origin} is missing from both locations, skipped")
-            next
-          end
+        movable = work.reject do |pair|
+          pair.missing? && @out.puts("  #{pair.gem}: #{pair.origin} is missing from both locations, skipped")
+        end
+        refuse_on_conflicts!(mover, movable)
 
+        moved = 0
+        movable.each do |pair|
           pair.hops.each { |from, to| mover.relocate(from, to) }
           ledger.record!(pair.gem, pair.origin, pair.oubliette) unless @dry_run
+          moved += 1
+        rescue Error => error
+          ledger.save! unless @dry_run
+          raise Error, <<~TEXT
+            #{error.message}
+
+            #{moved} of #{movable.length} directories had already moved when this failed, and
+            no framework configuration has been rewritten, so the suite will not run as
+            things stand. `rake oubliette:rollback` puts the moved ones back.
+          TEXT
         end
 
         ledger.save! unless @dry_run
+      end
+
+      # Everything is checked before anything is moved. A migration that stops
+      # halfway leaves directories in their new homes and the configuration
+      # still pointing at the old ones, which is worse than not starting.
+      def refuse_on_conflicts!(mover, pairs)
+        clashes = pairs.flat_map { |pair| pair.hops.flat_map { |from, to| mover.conflicts(from, to) } }.uniq
+        return if clashes.empty?
+
+        raise Error, <<~TEXT
+          these files already exist at the destination and would be overwritten:
+
+          #{clashes.map { |path| "  #{path}" }.join("\n")}
+
+          Nothing has been moved. Delete or rename them and run again -- generated
+          output like a coverage report is usually safe to delete.
+        TEXT
       end
 
       def ensure_movable!

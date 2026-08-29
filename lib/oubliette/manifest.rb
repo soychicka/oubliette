@@ -159,7 +159,7 @@ module Oubliette
 
         detection.moves.each do |origin, oubliette|
           next if Array(gem["paths"]).any? { |path| path["origin"] == origin }
-          next unless relevant?(detection.key, origin)
+          next unless relevant?(detection.key, origin, oubliette)
 
           gem["paths"] << { "origin" => origin, "oubliette" => oubliette }
         end
@@ -172,13 +172,23 @@ module Oubliette
       # would have the catalog propose test/support -> test/support on the next
       # run, and test/javascript -> test/javascript/jest would fold jest into
       # its own child, forever.
-      def relevant?(key, origin)
+      def relevant?(key, origin, oubliette)
+        return false if nests_inside_itself?(origin, oubliette)
         return false if ledger.current(key, origin)
         return false if ledger.pairs.any? { |pair|
           pair.current == origin || pair.current.to_s.start_with?("#{origin}/")
         }
 
         @root.join(origin).exist?
+      end
+
+      # test/javascript is jest's default home and test/javascript/jest is where
+      # it ends up, so once the move has happened the parent exists again and
+      # the catalog would propose folding it into its own child. This is checked
+      # structurally rather than against rollback.yml, because a project whose
+      # ledger has been lost still must not eat its own directory.
+      def nests_inside_itself?(origin, oubliette)
+        oubliette.start_with?("#{origin}/") && @root.join(oubliette).exist?
       end
 
       def merge_strays(names)
