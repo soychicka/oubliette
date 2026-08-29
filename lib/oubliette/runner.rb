@@ -20,10 +20,11 @@ module Oubliette
   # same command serve as the first migration, the sync after installing a new
   # framework, and the way you apply an edit.
   class Runner
-    def initialize(root, dry_run: false, out: $stdout, force: false)
+    def initialize(root, dry_run: false, out: $stdout, input: $stdin, force: false)
       @root = Pathname.new(root)
       @dry_run = dry_run
       @out = out
+      @input = input
       @force = force
       @log = ->(line) { @out.puts(line) }
     end
@@ -34,23 +35,25 @@ module Oubliette
       manifest = Manifest.build(@root)
       manifest.save! unless @dry_run
       report(manifest)
-      instructions(manifest)
+      prepared(manifest)
       manifest
     end
 
     def call
       ensure_movable!
-      fresh = !Manifest.exists_in?(@root)
+      first_run = !Manifest.exists_in?(@root)
       manifest = Manifest.build(@root)
       manifest.save! unless @dry_run
 
+      return manifest if first_run && !@dry_run && !confirmed?(manifest)
+
       mover = Mover.new(@root, dry_run: @dry_run, logger: @log)
-      move(manifest, mover)
+      moved = move(manifest, mover)
       write_configs(manifest)
       stage_configs(mover, manifest)
       report(manifest)
       report_stale_references(manifest)
-      instructions(manifest) if fresh
+      finished(manifest) if moved.to_i.positive? && !@dry_run
       manifest
     end
 
@@ -132,6 +135,7 @@ module Oubliette
         end
 
         ledger.save! unless @dry_run
+        moved
       end
 
       # Everything is checked before anything is moved. A migration that stops
@@ -228,20 +232,92 @@ module Oubliette
         @out.puts("  ... and #{findings.length - 40} more") if findings.length > 40
       end
 
-      def instructions(manifest)
+      def prepared(manifest)
         @out.puts
         @out.puts <<~TEXT
-          Wrote #{manifest.path.basename}. You can edit this file and rerun `rake oubliette`
-          to use your newly specified locations -- only the entries that differ from
-          #{Ledger::FILENAME} are touched, and a directory whose target changed is returned
-          to its origin first, then moved to the new one.
+          Wrote #{manifest.path}. Nothing has moved.
 
-            rake oubliette                          move what changed
-            rake oubliette:dry_run                  show what would change
-            rake oubliette:reset                    restore oubliette's own targets, and move
-            rake oubliette:rollback                 return everything to its origin
-            rake oubliette:put_back[rspec-rails]    return one framework
+            to exclude a framework, delete its entire entry from #{Manifest::FILENAME}
+            to change a target path, edit that entry's 'oubliette' attribute
+
+          when you're ready, run
+
+              rake oubliette
         TEXT
+      end
+
+      # The first run shows the developer what it proposes and waits to be told
+      # to go ahead. Nothing has moved at this point; only migrate.yml has been
+      # written, which is the file the answer is about.
+      def confirmed?(manifest)
+        show_manifest(manifest)
+        return proceed("not a terminal, so proceeding without asking") unless interactive?
+
+        @out.print("\ndo you want your test directories in this hierarchy? [y/N] ")
+        @out.flush if @out.respond_to?(:flush)
+
+        if @input.gets.to_s.strip.downcase.start_with?("y")
+          proceed("moving everything into place")
+        else
+          declined(manifest)
+          false
+        end
+      end
+
+      def interactive?
+        @input.respond_to?(:tty?) && @input.tty?
+      end
+
+      def proceed(reason)
+        @out.puts(reason)
+        true
+      end
+
+      def show_manifest(manifest)
+        @out.puts
+        @out.puts("this is what oubliette proposes, written to #{manifest.path}:")
+        @out.puts
+        manifest.render.each_line { |line| @out.puts("  #{line.chomp}") }
+      end
+
+      def declined(manifest)
+        @out.puts <<~TEXT
+
+          ok, we'll break here for now. Nothing has been moved.
+
+            to change these paths, you can manually modify the configuration by editing
+            => #{manifest.path}
+
+            to exclude a framework from consolidation, delete the entire entry for the gem
+            from #{Manifest::FILENAME}
+
+            to change a target path, update the path in the 'oubliette' attribute to your
+            preferred target path
+
+          when you're ready to proceed, run
+
+              rake oubliette
+
+          again to implement your changes.
+        TEXT
+      end
+
+      def finished(manifest)
+        @out.puts
+        @out.puts("I have turned the test suite upside down, and I have done it all for you.")
+        @out.puts
+        @out.puts("  #{manifest.path}")
+        @out.puts("      what you asked for. Edit a path and rerun `rake oubliette`.")
+        @out.puts("  #{Ledger.path_in(@root)}")
+        @out.puts("      where everything came from. `rake oubliette:rollback` reads this.")
+        guides = manifest.manual_configs
+        guides.each do |entry|
+          @out.puts("  #{@root.join("#{entry.file}.oubliette.md")}")
+          @out.puts("      #{entry.file} is yours to update; these are the instructions.")
+        end
+        @out.puts
+        @out.puts("  rake oubliette:status     where every test directory now lives")
+        @out.puts("  rake oubliette:rollback   put it all back")
       end
   end
 end

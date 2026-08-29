@@ -36,6 +36,23 @@ rake oubliette:install_specs   # add the layout spec to this project's suite
 The same commands exist as a CLI for non-Rails projects: `oubliette prepare`,
 `oubliette run`, `oubliette status`, `oubliette rollback [gem]`.
 
+## The first run asks first
+
+`rake oubliette` on a project that has never run it prints the migrate.yml it
+just wrote and waits:
+
+```
+do you want your test directories in this hierarchy? [y/N]
+```
+
+Answer no and nothing moves. You get told where the file is, that deleting a
+gem's entry excludes it, and that editing an entry's `oubliette` attribute
+changes where it lands. Run `rake oubliette` again when you are happy with it --
+the question is only asked once, because from then on migrate.yml is a file you
+have already read.
+
+When there is no terminal attached, as in CI, it says so and proceeds.
+
 ## Two files
 
 **migrate.yml is yours.** It says where you want each framework's directories to

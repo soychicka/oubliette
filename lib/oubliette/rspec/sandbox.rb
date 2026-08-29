@@ -43,12 +43,21 @@ module Oubliette
         self
       end
 
-      def runner(dry_run: false, force: false)
-        Runner.new(@root, dry_run: dry_run, out: @output, force: force)
+      # StringIO is not a tty, so a sandbox run proceeds without prompting unless
+      # an example deliberately hands it something that claims to be one.
+      def runner(dry_run: false, force: false, input: StringIO.new)
+        Runner.new(@root, dry_run: dry_run, out: @output, input: input, force: force)
       end
 
-      def run(dry_run: false)
-        runner(dry_run: dry_run).call
+      def run(dry_run: false, input: StringIO.new)
+        runner(dry_run: dry_run, input: input).call
+      end
+
+      # An answer typed at a real prompt.
+      def answering(text)
+        io = StringIO.new(text)
+        def io.tty? = true
+        io
       end
 
       def manifest
