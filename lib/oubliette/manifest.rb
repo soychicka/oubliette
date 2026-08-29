@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "yaml"
 require "pathname"
 require_relative "detector"
@@ -14,14 +15,30 @@ module Oubliette
   # directory here can never cost the project the ability to put it back.
   class Manifest
     FILENAME = "migrate.yml"
+    PATH = "#{HOME}/#{FILENAME}"
     VERSION = 1
 
     attr_reader :root, :path, :data
     attr_writer :ledger
 
-    def self.path_in(root) = Pathname.new(root).join(FILENAME)
+    def self.path_in(root) = Pathname.new(root).join(PATH)
 
-    def self.exists_in?(root) = path_in(root).file?
+    def self.exists_in?(root)
+      adopt_legacy(root)
+      path_in(root).file?
+    end
+
+    # Earlier versions kept this at the project root. Move it rather than
+    # ignoring it, so a project that migrated with an older gem keeps its
+    # answers instead of being asked everything again.
+    def self.adopt_legacy(root)
+      legacy = Pathname.new(root).join(FILENAME)
+      target = path_in(root)
+      return if !legacy.file? || target.file?
+
+      FileUtils.mkdir_p(target.dirname)
+      FileUtils.mv(legacy.to_s, target.to_s)
+    end
 
     def self.load(root)
       file = path_in(root)
@@ -134,6 +151,7 @@ module Oubliette
     end
 
     def save!
+      FileUtils.mkdir_p(@path.dirname)
       @path.write(render)
       self
     end

@@ -6,6 +6,12 @@ require_relative "oubliette/version"
 module Oubliette
   class Error < StandardError; end
 
+  # Oubliette's own files live under the tree it builds, not scattered through
+  # the project root. HOME holds what the developer reads and edits; SUPPORT
+  # holds the bookkeeping that belongs to oubliette alone.
+  HOME = "test/oubliette"
+  SUPPORT = "test/oubliette/support"
+
   class << self
     attr_writer :root
 

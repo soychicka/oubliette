@@ -23,7 +23,7 @@ RSpec.describe Oubliette::Scanner do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     Oubliette::Manifest.build(box.root).save!
 
-    expect(findings_for(box).map(&:file)).not_to include("migrate.yml")
+    expect(findings_for(box).map(&:file)).not_to include(Oubliette::Manifest::PATH)
   end
 
   it "finds nothing in a project with no stale references" do

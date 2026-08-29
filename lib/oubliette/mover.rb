@@ -116,7 +116,10 @@ module Oubliette
     # ".oubliette" held the config backups older versions took before they
     # learned to edit in place. Nothing writes it now, but a project that has
     # one should not be told its tree is dirty because of it.
-    OWNED = [ Manifest::FILENAME, Ledger::FILENAME, ".oubliette" ].freeze
+    # Oubliette's own files. Their being uncommitted is never a reason to
+    # refuse to run. ".oubliette" held the config backups older versions took
+    # before they learned to edit in place; nothing writes it now.
+    OWNED = [ HOME, Manifest::FILENAME, Ledger::FILENAME, ".oubliette" ].freeze
 
     # Kept public because the runner stages the config files it rewrites, which
     # is what lets a second run see a tree it still considers stable.
@@ -137,9 +140,20 @@ module Oubliette
 
       stdout, = Open3.capture2("git", "-C", @root.to_s, "status", "--porcelain")
       stdout.lines.map(&:chomp).reject(&:empty?).reject do |line|
-        path = line[3..].to_s.split(" -> ").last.delete_prefix('"').delete_suffix('"')
-        OWNED.any? { |owned| path == owned || path.start_with?("#{owned}/") }
+        owned?(line[3..].to_s.split(" -> ").last.delete_prefix('"').delete_suffix('"'))
       end
+    end
+
+    # git reports a wholly untracked directory as the directory, so the first
+    # run -- which creates test/oubliette inside a test/ that did not exist --
+    # shows up as "?? test/". Look inside before calling that the developer's
+    # uncommitted work.
+    def owned?(path)
+      return true if OWNED.any? { |owned| path == owned || path.start_with?("#{owned}/") }
+      return false unless path.end_with?("/")
+
+      files = @root.glob("#{path}**/*").select(&:file?)
+      files.any? && files.all? { |file| owned?(file.relative_path_from(@root).to_s) }
     end
     private
       def collisions(source, target)

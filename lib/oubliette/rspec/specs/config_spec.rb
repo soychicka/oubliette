@@ -196,11 +196,11 @@ RSpec.describe Oubliette::Config::ManualGuide do
   end
 
   it "writes the note beside the file that needs changing" do
-    expect(cypress_box).to be_exist("cypress.config.js.oubliette.md")
+    expect(cypress_box).to be_exist("test/oubliette/cypress.config.js.md")
   end
 
   it "names the setting, the move, and a before and after" do
-    guide = cypress_box.read("cypress.config.js.oubliette.md")
+    guide = cypress_box.read("test/oubliette/cypress.config.js.md")
 
     expect(guide).to include("cypress -> test/javascript/cypress")
     expect(guide).to include("e2e.specPattern")
@@ -218,7 +218,7 @@ RSpec.describe Oubliette::Config::ManualGuide do
     box = cypress_box
     box.runner.rollback
 
-    expect(box).not_to be_exist("cypress.config.js.oubliette.md")
+    expect(box).not_to be_exist("test/oubliette/cypress.config.js.md")
     expect(box).to be_exist("cypress")
   end
 
@@ -226,14 +226,14 @@ RSpec.describe Oubliette::Config::ManualGuide do
     box = new_sandbox(packages: %w[jest], dirs: %w[spec/javascript])
     box.run
 
-    expect(box.root.glob("*.oubliette.md")).to be_empty
+    expect(box.root.glob("test/oubliette/*.md")).to be_empty
   end
 
   it "writes nothing when the project has no such config file" do
     box = new_sandbox(packages: %w[cypress], dirs: %w[cypress])
     box.run
 
-    expect(box.root.glob("*.oubliette.md")).to be_empty
+    expect(box.root.glob("test/oubliette/*.md")).to be_empty
   end
 end
 
@@ -243,7 +243,7 @@ RSpec.describe "#{Oubliette::Config::ManualGuide} example code" do
                       files: { "cypress.config.js" => "module.exports = {};\n" })
     box.run
 
-    expect(box.read("cypress.config.js.oubliette.md"))
+    expect(box.read("test/oubliette/cypress.config.js.md"))
       .to include(%(e2e: { specPattern: "test/javascript/cypress/**/*" }))
   end
 
@@ -252,7 +252,7 @@ RSpec.describe "#{Oubliette::Config::ManualGuide} example code" do
                       files: { "playwright.config.js" => "module.exports = {};\n" })
     box.run
 
-    guide = box.read("playwright.config.js.oubliette.md")
+    guide = box.read("test/oubliette/playwright.config.js.md")
     expect(guide).to include(%(testDir: "test/javascript/playwright/**/*"))
     expect(guide).not_to include("{ testDir")
   end

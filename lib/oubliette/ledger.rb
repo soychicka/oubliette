@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "yaml"
 require "pathname"
 require_relative "pair"
@@ -13,15 +14,31 @@ module Oubliette
   # because the original location is recorded here and never rewritten.
   class Ledger
     FILENAME = "rollback.yml"
+    PATH = "#{SUPPORT}/#{FILENAME}"
     VERSION = 1
 
     attr_reader :root, :path, :data
 
-    def self.path_in(root) = Pathname.new(root).join(FILENAME)
+    def self.path_in(root) = Pathname.new(root).join(PATH)
 
-    def self.exists_in?(root) = path_in(root).file?
+    def self.exists_in?(root)
+      adopt_legacy(root)
+      path_in(root).file?
+    end
+
+    # As with migrate.yml: a project written by an older gem keeps its record of
+    # where everything came from rather than losing the ability to roll back.
+    def self.adopt_legacy(root)
+      legacy = Pathname.new(root).join(FILENAME)
+      target = path_in(root)
+      return if !legacy.file? || target.file?
+
+      FileUtils.mkdir_p(target.dirname)
+      FileUtils.mv(legacy.to_s, target.to_s)
+    end
 
     def self.load(root)
+      adopt_legacy(root)
       file = path_in(root)
       new(root, file.file? ? (YAML.safe_load(file.read, aliases: false) || {}) : {})
     end
@@ -79,6 +96,7 @@ module Oubliette
     end
 
     def save!
+      FileUtils.mkdir_p(@path.dirname)
       @path.write(render)
       self
     end

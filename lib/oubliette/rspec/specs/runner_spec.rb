@@ -70,10 +70,10 @@ RSpec.describe Oubliette::Runner do
   it "changes nothing the second time it runs" do
     box = full_app
     box.run
-    before = box.read("migrate.yml")
+    before = box.read(Oubliette::Manifest::PATH)
     box.run
 
-    expect(box.read("migrate.yml")).to eq(before)
+    expect(box.read(Oubliette::Manifest::PATH)).to eq(before)
     expect(box.manifest.pairs.map(&:status).uniq).to contain_exactly(:settled, :canonical)
     expect(box).to be_exist("test/rspec/models")
     expect(box).not_to be_exist("test/rspec/rspec")
@@ -96,7 +96,7 @@ RSpec.describe Oubliette::Runner do
   it "sends a directory home before sending it somewhere new" do
     box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec", "oubliette: test/examples"))
     box.run
 
     expect(box).to be_exist("test/examples/models")
@@ -110,7 +110,7 @@ RSpec.describe Oubliette::Runner do
 
     expect(box).to be_exist("spec/models")
     expect(box).not_to be_exist("test/rspec")
-    expect(box).not_to be_exist("migrate.yml")
+    expect(box).not_to be_exist(Oubliette::Manifest::PATH)
     expect(box.log).to include("spec -> test/rspec")
   end
 
@@ -161,7 +161,7 @@ RSpec.describe Oubliette::Runner do
     box = new_sandbox(gems: %w[rspec-rails cucumber-rails], dirs: %w[spec/models features/support])
     box.run
     box.commit("migrated")
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec", "oubliette: test/examples"))
     box.run
 
     relocations = box.log.lines.map(&:chomp).count("  features -> test/cucumber/features")
@@ -173,9 +173,9 @@ RSpec.describe Oubliette::Runner do
   it "restores the original location even after migrate.yml has been retargeted twice" do
     box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec", "oubliette: test/examples"))
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/examples", "oubliette: test/somewhere"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/examples", "oubliette: test/somewhere"))
     box.run
     box.runner.rollback
 
@@ -186,7 +186,7 @@ RSpec.describe Oubliette::Runner do
   it "rolls back to the origin even when migrate.yml is gibberish" do
     box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    box.write("migrate.yml", "version: 1\ngems: {}\nstrays: {}\n")
+    box.write(Oubliette::Manifest::PATH, "version: 1\ngems: {}\nstrays: {}\n")
     box.commit("mangled the manifest")
     box.runner.rollback
 
@@ -205,24 +205,24 @@ RSpec.describe Oubliette::Runner do
   it "puts oubliette's own targets back on reset, and moves to match" do
     box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec", "oubliette: test/examples"))
     box.run
     box.commit("retargeted")
     box.runner.reset
 
     expect(box).to be_exist("test/rspec/models")
     expect(box).not_to be_exist("test/examples")
-    expect(box.read("migrate.yml")).to include("oubliette: test/rspec")
+    expect(box.read(Oubliette::Manifest::PATH)).to include("oubliette: test/rspec")
     expect(box.read(".rspec")).to include("--default-path test/rspec")
   end
 
   it "resets one framework and leaves another framework's edit in place" do
     box = new_sandbox(gems: %w[rspec-rails cucumber-rails], dirs: %w[spec/models features/support])
     box.run
-    edited = box.read("migrate.yml")
+    edited = box.read(Oubliette::Manifest::PATH)
       .sub("oubliette: test/rspec", "oubliette: test/examples")
       .sub("oubliette: test/cucumber/features", "oubliette: test/gherkin")
-    box.write("migrate.yml", edited)
+    box.write(Oubliette::Manifest::PATH, edited)
     box.run
     box.commit("retargeted both")
     box.runner.reset("rspec-rails")

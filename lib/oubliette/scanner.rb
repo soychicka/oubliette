@@ -10,7 +10,8 @@ module Oubliette
   # written into a helper somewhere. Those are reported rather than rewritten.
   class Scanner
     SEARCHABLE = %w[.rb .rake .yml .yaml .js .ts .json .erb .feature .sh].freeze
-    SKIP = %w[.git node_modules tmp log vendor .oubliette public storage coverage].freeze
+    SKIP = %w[.git node_modules tmp log vendor .oubliette public storage coverage]
+           .push(HOME).freeze
 
     Finding = Data.define(:file, :line, :path, :text)
 
@@ -48,6 +49,7 @@ module Oubliette
       def skipped?(path)
         relative = path.relative_path_from(@root).to_s
         return true if [ Manifest::FILENAME, Ledger::FILENAME ].include?(relative)
+
 
         SKIP.any? { |dir| relative == dir || relative.start_with?("#{dir}/") }
       end

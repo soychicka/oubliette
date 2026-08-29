@@ -24,7 +24,7 @@ RSpec.describe Oubliette::Manifest do
   it "keeps a hand-edited target across a sync" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
     described_class.build(box.root).save!
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec", "oubliette: test/examples"))
 
     expect(described_class.build(box.root).destination("rspec-rails")).to eq("test/examples")
   end
@@ -52,7 +52,7 @@ RSpec.describe Oubliette::Manifest do
   it "moves a stray once the user enables it" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec despec])
     described_class.build(box.root).save!
-    box.write("migrate.yml", box.read("migrate.yml").sub(/enabled: false/, "enabled: true"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub(/enabled: false/, "enabled: true"))
 
     expect(described_class.build(box.root).pairs.map(&:origin)).to include("despec")
   end
@@ -75,7 +75,7 @@ RSpec.describe Oubliette::Manifest do
   it "calls a pair pending as soon as the target is edited" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec", "oubliette: test/examples"))
 
     expect(box.manifest.pairs.map(&:status)).to eq([ :pending ])
   end
@@ -116,7 +116,7 @@ RSpec.describe "#{Oubliette::Manifest} self-nesting" do
   it "still refuses when rollback.yml has been lost" do
     box = sandbox(packages: %w[jest], dirs: %w[spec/javascript])
     box.run
-    FileUtils.rm(box.root.join("rollback.yml"))
+    FileUtils.rm(box.root.join(Oubliette::Ledger::PATH))
     box.commit("lost the ledger")
 
     expect(Oubliette::Manifest.build(box.root).pairs.map(&:origin)).not_to include("test/javascript")

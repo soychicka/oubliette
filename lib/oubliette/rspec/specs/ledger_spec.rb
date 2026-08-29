@@ -12,7 +12,7 @@ RSpec.describe Oubliette::Ledger do
   it "still knows the origin after migrate.yml has been retargeted" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec", "oubliette: test/examples"))
+    box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec", "oubliette: test/examples"))
     box.commit("retarget")
     box.run
 
@@ -24,7 +24,7 @@ RSpec.describe Oubliette::Ledger do
   it "survives migrate.yml being deleted outright" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
-    FileUtils.rm(box.root.join("migrate.yml"))
+    FileUtils.rm(box.root.join(Oubliette::Manifest::PATH))
     box.commit("lost the manifest")
     box.runner.rollback
 
@@ -58,7 +58,7 @@ RSpec.describe "#{Oubliette}.path" do
     Oubliette.root = box.root
 
     expect(Oubliette.path("rspec-rails").to_s).to end_with("/spec")
-    expect(box.read("migrate.yml")).to include("oubliette: test/rspec")
+    expect(box.read(Oubliette::Manifest::PATH)).to include("oubliette: test/rspec")
   ensure
     Oubliette.root = nil
   end

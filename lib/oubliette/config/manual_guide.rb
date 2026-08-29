@@ -20,7 +20,11 @@ module Oubliette
         @entry = entry
       end
 
-      def filename = "#{@entry.file}.oubliette.md"
+      # Written under oubliette's own directory rather than beside the config
+      # it describes: the point of the gem is that test paraphernalia lives in
+      # one place. The run names the path in its report and again when it
+      # finishes, so it is not left to be stumbled upon.
+      def filename = "#{HOME}/#{@entry.file.tr('/', '-')}.md"
 
       # The whole file is oubliette's, so a rollback removes it outright rather
       # than trying to restore anything from inside it.

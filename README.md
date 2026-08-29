@@ -55,7 +55,18 @@ When there is no terminal attached, as in CI, it says so and proceeds.
 
 ## Two files
 
-**migrate.yml is yours.** It says where you want each framework's directories to
+Oubliette keeps its own paperwork inside the tree it builds rather than
+scattering it through the project root:
+
+```
+test/oubliette/
+├── migrate.yml                 the file you edit
+├── cypress.config.js.md        instructions for a config it will not rewrite
+└── support/
+    └── rollback.yml            its own bookkeeping, not yours to edit
+```
+
+**test/oubliette/migrate.yml is yours.** It says where you want each framework's directories to
 live, and nothing else. `rake oubliette:prepare` writes it; if you never run
 `prepare`, the first `rake oubliette` generates it, uses it, and tells you that
 you can edit it and rerun.
@@ -204,8 +215,8 @@ than in JSON, and there is no round trip that cannot corrupt a module. RSpec,
 Cucumber, Jest and Jasmine are rewritten for you.
 
 For the four it will not touch, oubliette writes the instructions instead. A
-`cypress.config.js` gets a `cypress.config.js.oubliette.md` beside it naming the
-move, the setting to change, and the line to paste:
+`cypress.config.js` gets a `test/oubliette/cypress.config.js.md` naming the move,
+the setting to change, and the line to paste:
 
 ```js
 // after

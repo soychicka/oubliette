@@ -198,7 +198,7 @@ bundle exec rake oubliette:selftest
 
 echo "==> retarget migrate.yml by hand, then apply"
 git -c user.email=e2e@example.com -c user.name=e2e commit -qam "after oubliette"
-ruby -i -pe 'sub("oubliette: test/rspec", "oubliette: test/examples")' migrate.yml
+ruby -i -pe 'sub("oubliette: test/rspec", "oubliette: test/examples")' test/oubliette/migrate.yml
 bundle exec rake oubliette
 test -d test/examples || { echo "the hand-edited target was ignored"; exit 1; }
 test ! -d test/rspec || { echo "the old target was left behind"; exit 1; }
@@ -222,7 +222,7 @@ git -c user.email=e2e@example.com -c user.name=e2e commit -qam "put back cucumbe
 bundle exec rake oubliette:rollback
 test -d spec/models || { echo "rollback did not restore spec/"; exit 1; }
 test -d test/models || { echo "rollback did not restore test/models"; exit 1; }
-test -f rollback.yml || { echo "rollback.yml is missing"; exit 1; }
+test -f test/oubliette/support/rollback.yml || { echo "rollback.yml is missing"; exit 1; }
 
 echo "==> the suites still run once everything is back where it started"
 bundle exec rspec

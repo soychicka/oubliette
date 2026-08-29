@@ -145,7 +145,7 @@ RSpec.describe "config files survive being edited" do
       box = full_box
       before = box.read(".rspec")
       box.run
-      box.write("migrate.yml", box.read("migrate.yml").sub("oubliette: test/rspec\n", "oubliette: test/examples\n"))
+      box.write(Oubliette::Manifest::PATH, box.read(Oubliette::Manifest::PATH).sub("oubliette: test/rspec\n", "oubliette: test/examples\n"))
       box.run
       box.runner.rollback
 
