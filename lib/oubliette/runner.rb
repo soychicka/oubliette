@@ -10,6 +10,7 @@ require_relative "config/cucumber"
 require_relative "config/cucumber_env"
 require_relative "config/javascript"
 require_relative "config/jasmine"
+require_relative "config/manual_guide"
 
 module Oubliette
   # Detect, describe, move, rewrite, record.
@@ -168,12 +169,22 @@ module Oubliette
         names = manifest.gems.select { |key| manifest.enabled?(key) }
                              .flat_map { |key| manifest.config_writers(key) }
                              .uniq - [ :manual ]
-        return if names.empty?
+        guides = manual_guides(manifest)
+        return if names.empty? && guides.empty?
 
         @out.puts
         @out.puts(@dry_run ? "would rewrite config" : "rewriting config")
         names.each do |name|
           Config::Writer.build(name, @root, manifest, dry_run: @dry_run, logger: @log)&.apply
+        end
+
+        guides.each(&:apply)
+      end
+
+      # A config oubliette will not rewrite gets written instructions instead.
+      def manual_guides(manifest)
+        manifest.manual_configs.map do |entry|
+          Config::ManualGuide.new(@root, manifest, entry: entry, dry_run: @dry_run, logger: @log)
         end
       end
 
@@ -182,6 +193,8 @@ module Oubliette
         names.each do |name|
           Config::Writer.build(name, @root, manifest, dry_run: @dry_run, logger: @log)&.revert
         end
+
+        manual_guides(manifest).each(&:revert)
       end
 
       # Config files are rewritten, not moved, so they need staging of their own
@@ -192,6 +205,7 @@ module Oubliette
         names = Config::Writer.registry.keys.filter_map do |name|
           Config::Writer.build(name, @root, manifest, dry_run: true, logger: ->(_line) { })&.filename
         end
+        names += manual_guides(manifest).map(&:filename)
         mover.stage(*names.uniq.select { |name| @root.join(name).exist? })
       end
 

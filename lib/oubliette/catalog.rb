@@ -10,7 +10,8 @@ module Oubliette
     ROOT = "test"
 
     # ecosystem  :ruby | :javascript
-    # manual_config  config files oubliette knows about but will not rewrite
+    # manual_config    config files oubliette knows about but will not rewrite
+    # manual_settings  the settings in them that name a path
     # gems       names looked for in Gemfile / Gemfile.lock
     # packages   names looked for in package.json dependencies
     # paths      directories whose mere presence proves the framework is in use
@@ -168,7 +169,8 @@ module Oubliette
         key: "vitest", label: "Vitest", ecosystem: :javascript,
         packages: %w[vitest], paths: %w[tests/unit],
         moves: { "tests/unit" => "test/javascript/vitest" },
-        config: %i[manual], manual_config: %w[vitest.config.js vitest.config.ts vite.config.js vite.config.ts]
+        config: %i[manual], manual_config: %w[vitest.config.js vitest.config.ts vite.config.js vite.config.ts],
+        manual_settings: %w[test.include test.dir]
       },
       {
         key: "@playwright/test", label: "Playwright", ecosystem: :javascript,
@@ -178,19 +180,22 @@ module Oubliette
           "tests/e2e" => "test/javascript/playwright",
           "playwright" => "test/javascript/playwright"
         },
-        config: %i[manual], manual_config: %w[playwright.config.js playwright.config.ts]
+        config: %i[manual], manual_config: %w[playwright.config.js playwright.config.ts],
+        manual_settings: %w[testDir]
       },
       {
         key: "cypress", label: "Cypress", ecosystem: :javascript,
         packages: %w[cypress], paths: %w[cypress],
         moves: { "cypress" => "test/javascript/cypress" },
-        config: %i[manual], manual_config: %w[cypress.config.js cypress.config.ts]
+        config: %i[manual], manual_config: %w[cypress.config.js cypress.config.ts],
+        manual_settings: %w[e2e.specPattern component.specPattern]
       },
       {
         key: "karma", label: "Karma", ecosystem: :javascript,
         packages: %w[karma], paths: %w[karma spec/karma],
         moves: { "karma" => "test/javascript/karma", "spec/karma" => "test/javascript/karma" },
-        config: %i[manual], manual_config: %w[karma.conf.js karma.conf.ts]
+        config: %i[manual], manual_config: %w[karma.conf.js karma.conf.ts],
+        manual_settings: %w[basePath files]
       }
     ].freeze
 

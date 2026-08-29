@@ -157,9 +157,21 @@ touched, and rollback is a restore.
 
 Vitest, Playwright, Cypress and Karma are detected and moved, but their config
 files are not rewritten: those keep their paths in a javascript module rather
-than in JSON, and there is no round trip that cannot corrupt a module. The run
-prints them under "CONFIG YOU MUST UPDATE BY HAND", naming the file and the move
-that invalidated it. RSpec, Cucumber, Jest and Jasmine are rewritten for you.
+than in JSON, and there is no round trip that cannot corrupt a module. RSpec,
+Cucumber, Jest and Jasmine are rewritten for you.
+
+For the four it will not touch, oubliette writes the instructions instead. A
+`cypress.config.js` gets a `cypress.config.js.oubliette.md` beside it naming the
+move, the setting to change, and the line to paste:
+
+```js
+// after
+e2e: { specPattern: "test/javascript/cypress/**/*" }
+```
+
+The note is treated as a config file oubliette owns, so `rake oubliette:rollback`
+deletes it along with putting the directories back. The run also lists them under
+"CONFIG YOU MUST UPDATE BY HAND" so they are not discovered by surprise.
 
 Oubliette rewrites framework configuration and repairs ruby's `require_relative`
 when a directory changes depth. It does not rewrite application code, and it does

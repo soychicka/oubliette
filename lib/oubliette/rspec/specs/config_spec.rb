@@ -179,3 +179,74 @@ RSpec.describe "config oubliette will not rewrite" do
     expect(box.log).not_to include("CONFIG YOU MUST UPDATE BY HAND")
   end
 end
+
+RSpec.describe Oubliette::Config::ManualGuide do
+  def cypress_box
+    box = new_sandbox(packages: %w[cypress], dirs: %w[cypress],
+                      files: { "cypress.config.js" => "module.exports = { e2e: { specPattern: 'cypress/**' } };\n" })
+    box.run
+    box
+  end
+
+  it "writes the note beside the file that needs changing" do
+    expect(cypress_box).to be_exist("cypress.config.js.oubliette.md")
+  end
+
+  it "names the setting, the move, and a before and after" do
+    guide = cypress_box.read("cypress.config.js.oubliette.md")
+
+    expect(guide).to include("cypress -> test/javascript/cypress")
+    expect(guide).to include("e2e.specPattern")
+    expect(guide).to include("// before")
+    expect(guide).to include('"test/javascript/cypress/**/*"')
+  end
+
+  it "leaves the config file itself alone" do
+    original = "module.exports = { e2e: { specPattern: 'cypress/**' } };\n"
+
+    expect(cypress_box.read("cypress.config.js")).to eq(original)
+  end
+
+  it "is removed by a rollback" do
+    box = cypress_box
+    box.runner.rollback
+
+    expect(box).not_to be_exist("cypress.config.js.oubliette.md")
+    expect(box).to be_exist("cypress")
+  end
+
+  it "writes nothing for a framework whose config oubliette rewrites" do
+    box = new_sandbox(packages: %w[jest], dirs: %w[spec/javascript])
+    box.run
+
+    expect(box.root.glob("*.oubliette.md")).to be_empty
+  end
+
+  it "writes nothing when the project has no such config file" do
+    box = new_sandbox(packages: %w[cypress], dirs: %w[cypress])
+    box.run
+
+    expect(box.root.glob("*.oubliette.md")).to be_empty
+  end
+end
+
+RSpec.describe "#{Oubliette::Config::ManualGuide} example code" do
+  it "nests a dotted setting back into the object literal it lives in" do
+    box = new_sandbox(packages: %w[cypress], dirs: %w[cypress],
+                      files: { "cypress.config.js" => "module.exports = {};\n" })
+    box.run
+
+    expect(box.read("cypress.config.js.oubliette.md"))
+      .to include(%(e2e: { specPattern: "test/javascript/cypress/**/*" }))
+  end
+
+  it "leaves a flat setting flat" do
+    box = new_sandbox(packages: %w[@playwright/test], dirs: %w[e2e],
+                      files: { "playwright.config.js" => "module.exports = {};\n" })
+    box.run
+
+    guide = box.read("playwright.config.js.oubliette.md")
+    expect(guide).to include(%(testDir: "test/javascript/playwright/**/*"))
+    expect(guide).not_to include("{ testDir")
+  end
+end

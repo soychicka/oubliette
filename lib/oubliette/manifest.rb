@@ -80,7 +80,7 @@ module Oubliette
     # Frameworks whose directories oubliette moves but whose configuration it
     # will not touch, because the paths live in a javascript module rather than
     # in JSON. Only reported when the config file is really there.
-    ManualConfig = Data.define(:gem, :file, :pairs)
+    ManualConfig = Data.define(:gem, :file, :pairs, :settings)
 
     def manual_configs
       @data["gems"].flat_map do |key, gem|
@@ -91,7 +91,14 @@ module Oubliette
 
         Array(Catalog.find(key)&.dig(:manual_config))
           .select { |file| @root.join(file).file? }
-          .map { |file| ManualConfig.new(gem: key, file: file, pairs: moving) }
+          .map do |file|
+            ManualConfig.new(
+              gem: key,
+              file: file,
+              pairs: moving,
+              settings: Array(Catalog.find(key)&.dig(:manual_settings))
+            )
+          end
       end
     end
 
