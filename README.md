@@ -274,6 +274,12 @@ location, a VCR cassette, and the same javascript behaviour covered twice, once
 in jest and once in jasmine. Oubliette is left commented out in its Gemfile so
 the install can be demonstrated.
 
+`bin/full-pass [build-dir]` runs everything in sequence and prints a pass/fail
+table: the gem's own suite and rubocop, `bin/e2e`, a regenerated playground, and
+then, from inside that application, every suite before and after a migration, a
+rollback, a second migration, `rake oubliette:selftest`, and the layout spec
+installed by `rake oubliette:install_specs`.
+
 `bin/e2e /some/build/dir` goes further: it generates a brand new Rails
 application with RSpec, Cucumber, Minitest, FactoryBot, Capybara, VCR, SimpleCov
 and Jest installed, proves `rspec`, `cucumber` and `bin/rails test` all pass,

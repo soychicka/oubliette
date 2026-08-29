@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# usage: bin/full-pass [build-dir]
+#
+# One full pass: the gem's own suite, its end-to-end script, a freshly generated
+# application with every framework, and the gem's integrated tests run from
+# inside that application.
+set -uo pipefail
+unset BUNDLE_GEMFILE BUNDLE_PATH BUNDLE_BIN_PATH RUBYOPT || true
+export RBENV_VERSION=3.4.1
+SCRATCH="${1:-$(mktemp -d)}"
+GEM="$HOME/developer/gems/oubliette"
+APP="$SCRATCH/pass"
+RESULTS="$SCRATCH/full-pass-results.txt"
+: > "$RESULTS"
+
+step() {
+  local name="$1"; shift
+  echo; echo "############ $name"
+  if "$@" > "$SCRATCH/step.log" 2>&1; then
+    echo "PASS  $name" | tee -a "$RESULTS"
+  else
+    echo "FAIL  $name" | tee -a "$RESULTS"
+    tail -25 "$SCRATCH/step.log"
+  fi
+  tail -4 "$SCRATCH/step.log"
+}
+
+cd "$GEM"
+# Generated apps install their own bundles and shift shared gem versions, which
+# leaves this gem's (gitignored) lockfile naming versions that are gone.
+step "0. bundle install for the gem itself" bundle install
+step "1. gem suite (151 specs)" bundle exec rspec
+step "2. rubocop" bundle exec rubocop
+step "3. bin/e2e -- generated app, full migrate/retarget/reset/put_back/rollback" "$GEM/bin/e2e" "$SCRATCH"
+step "4. bin/playground -- regenerate the demo app, verified twice" "$GEM/bin/playground"
+
+rm -rf "$APP"; cp -R "$HOME/developer/Projects/oubliette-playground" "$APP"; cd "$APP"
+ruby -i -pe 'sub(/^# gem "oubliette"/, %q{gem "oubliette"})' Gemfile
+bundle install --quiet > /dev/null 2>&1
+git -c user.email=p@e.c -c user.name=p commit -qam "install oubliette" > /dev/null 2>&1
+
+step "5. every suite, before anything moves" bin/verify
+step "6. rake oubliette" bundle exec rake oubliette
+step "7. every suite, after the migration" bin/verify
+step "8. rake oubliette:selftest -- the gem's specs, no app code loaded" bundle exec rake oubliette:selftest
+
+git -c user.email=p@e.c -c user.name=p commit -qam migrated > /dev/null 2>&1
+step "9. rake oubliette:rollback" bundle exec rake oubliette:rollback
+step "10. every suite, after the rollback" bin/verify
+
+git -c user.email=p@e.c -c user.name=p commit -qam "rolled back" > /dev/null 2>&1
+step "11. rake oubliette -- migrate again" bundle exec rake oubliette
+step "12. rake oubliette:install_specs -- add the layout spec to the app" bundle exec rake oubliette:install_specs
+git -c user.email=p@e.c -c user.name=p commit -qam "layout spec" > /dev/null 2>&1
+step "13. the app's own suite, now including the layout spec" bundle exec rspec
+step "14. every suite once more" bin/verify
+
+echo; echo "################ SUMMARY"; cat "$RESULTS"
+grep -c "^PASS" "$RESULTS" | sed 's/^/passed: /'
+grep -c "^FAIL" "$RESULTS" | sed 's/^/failed: /'

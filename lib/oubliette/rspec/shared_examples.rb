@@ -63,10 +63,19 @@ RSpec.shared_examples "an oubliette-managed project" do |project_root|
   it "points cucumber.yml at the relocated features tree" do
     destination = manifest.destination("cucumber-rails")
     skip "project does not use cucumber" if destination.nil?
-    skip "project has no cucumber.yml" unless root.join("cucumber.yml").file?
 
-    contents = root.join("cucumber.yml").read
-    expect(contents).to include(destination)
-    expect(contents).not_to match(%r{(?<![\w/.-])features(?=[\s/'"]|$)})
+    # cucumber-rails writes config/cucumber.yml while a plain cucumber project
+    # keeps it at the root. Looking only at the root quietly skipped this check
+    # on every rails application, which is most of them.
+    config = Oubliette::Config::Cucumber::CANDIDATES.map { |name| root.join(name) }.find(&:file?)
+    skip "project has no cucumber.yml" if config.nil?
+
+    # Only the lines cucumber actually reads. Oubliette keeps each original
+    # above its replacement, commented out, so the old path is still in the
+    # file on purpose and finding it there proves nothing.
+    active = config.read.lines.reject { |line| line.strip.start_with?("#") }.join
+
+    expect(active).to include(destination)
+    expect(active).not_to match(Oubliette::PathToken.pattern("features"))
   end
 end
