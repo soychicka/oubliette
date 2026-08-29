@@ -124,9 +124,14 @@ your edits alone.
 thing — reads rollback.yml and returns every directory to its `origin`. Both
 take a framework name to scope them: `rake oubliette:put_back[cucumber-rails]`.
 
-Set `enabled: false` on a gem in migrate.yml to leave it alone. Directories that
-look like test trees but belong to no known framework are listed under
-`strays:`, disabled, so including one is a deliberate edit.
+There are two ways to leave a framework alone. Delete its entry from migrate.yml
+and it stays deleted -- oubliette records which frameworks it has written down,
+so it can tell one you removed from one it has never met, and will not put it
+back. Or set `enabled: false` on the entry, which does the same thing while
+keeping the decision visible in the file. `rake oubliette:reset` undoes either.
+
+Directories that look like test trees but belong to no known framework are listed
+under `strays:`, disabled, so including one is a deliberate edit.
 
 ## Layout
 

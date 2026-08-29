@@ -153,6 +153,7 @@ module Oubliette
     def save!
       FileUtils.mkdir_p(@path.dirname)
       @path.write(render)
+      ledger.remember!(gems).save!
       self
     end
 
@@ -194,6 +195,8 @@ module Oubliette
       end
 
       def merge_detection(detection)
+        return if deleted?(detection.key)
+
         gem = (@data["gems"][detection.key] ||= {
           "enabled" => true,
           "config" => detection.config.map(&:to_s),
@@ -206,6 +209,12 @@ module Oubliette
 
           gem["paths"] << { "origin" => origin, "oubliette" => oubliette }
         end
+      end
+
+      # A framework oubliette has written down before and that is no longer in
+      # the file was taken out on purpose. Leave it out.
+      def deleted?(key)
+        !@data["gems"].key?(key) && ledger.known?(key)
       end
 
       # A catalog default earns a line only when the directory is really there

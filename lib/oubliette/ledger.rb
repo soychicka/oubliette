@@ -49,6 +49,24 @@ module Oubliette
       @data = data
       @data["version"] ||= VERSION
       @data["gems"] ||= {}
+      @data["known_gems"] ||= []
+    end
+
+    # Every framework oubliette has written into migrate.yml at least once.
+    # Without this it cannot tell a framework the developer deleted from one it
+    # has simply never seen, and would helpfully put the deleted one back.
+    def known?(key) = @data["known_gems"].include?(key)
+
+    def remember!(keys)
+      @data["known_gems"] = (@data["known_gems"] | Array(keys)).sort
+      self
+    end
+
+    # Forgetting makes a deleted entry eligible to come back, which is what
+    # `rake oubliette:reset` is for.
+    def forget_known!(key = nil)
+      @data["known_gems"] = key ? @data["known_gems"] - [ key ] : []
+      self
     end
 
     # Where this directory is right now, or nil if oubliette has never moved it.

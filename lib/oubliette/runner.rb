@@ -60,6 +60,7 @@ module Oubliette
     # Puts migrate.yml's targets back to oubliette's own defaults, discarding
     # hand edits, and then moves the directories to match.
     def reset(key = nil)
+      Ledger.load(@root).forget_known!(key).save!
       manifest = Manifest.build(@root)
       manifest.reset_targets!(only: key)
       manifest.save! unless @dry_run
@@ -239,7 +240,8 @@ module Oubliette
         @out.puts <<~TEXT
           Wrote #{manifest.path}. Nothing has moved.
 
-            to exclude a framework, delete its entire entry from #{Manifest::FILENAME}
+            to exclude a framework, delete its entire entry from #{Manifest::FILENAME},
+              or set `enabled: false` on it to keep the entry in view
             to change a target path, edit that entry's 'oubliette' attribute
 
           when you're ready, run
@@ -291,7 +293,9 @@ module Oubliette
             => #{manifest.path}
 
             to exclude a framework from consolidation, delete the entire entry for the gem
-            from #{Manifest::FILENAME}
+            from #{Manifest::FILENAME}. It stays deleted; `rake oubliette:reset` brings it
+            back if you change your mind. Setting `enabled: false` on the entry does the
+            same thing without losing sight of it.
 
             to change a target path, update the path in the 'oubliette' attribute to your
             preferred target path
