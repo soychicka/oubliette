@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "pathname"
+require_relative "path_token"
 
 module Oubliette
   # Finds hardcoded references to the old locations that survived the move.
@@ -33,11 +34,7 @@ module Oubliette
       # "checkbox with support features" are prose, and reporting them would
       # bury the handful of references that genuinely need editing.
       def patterns_for(old)
-        escaped = Regexp.escape(old)
-        [
-          %r{(?<![\w/.-])#{escaped}/},
-          %r{(?<=["'`])#{escaped}(?=["'`])}
-        ]
+        [ PathToken.prefix_pattern(old), PathToken.quoted_pattern(old) ]
       end
 
       def files

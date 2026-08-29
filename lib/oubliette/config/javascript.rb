@@ -2,6 +2,7 @@
 
 require "json"
 require_relative "writer"
+require_relative "../path_token"
 
 module Oubliette
   module Config
@@ -78,9 +79,7 @@ module Oubliette
         end
 
         def substitute(text, substitutions)
-          substitutions.reduce(text) do |value, (from, to)|
-            value.gsub(%r{(?<![\w/.-])#{Regexp.escape(from)}(?=[\s/'"]|$)}, to)
-          end
+          substitutions.reduce(text) { |value, (from, to)| PathToken.substitute(value, from, to) }
         end
     end
   end

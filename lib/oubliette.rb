@@ -39,6 +39,7 @@ module Oubliette
   end
 end
 
+require_relative "oubliette/path_token"
 require_relative "oubliette/catalog"
 require_relative "oubliette/pair"
 require_relative "oubliette/ledger"

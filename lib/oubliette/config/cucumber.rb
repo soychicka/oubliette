@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "writer"
+require_relative "../path_token"
 
 module Oubliette
   module Config
@@ -44,7 +45,7 @@ module Oubliette
         end
 
         def substitute(line, path)
-          line.gsub(%r{(?<![\w/.-])features(?=[\s/'"]|$)}, path)
+          PathToken.substitute(line, "features", path)
         end
 
         # Cucumber only auto-requires the ruby files beside a feature tree when
