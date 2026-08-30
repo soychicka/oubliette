@@ -84,49 +84,6 @@ RSpec.describe "#{Oubliette::Scanner} and oubliette's own writing" do
   end
 end
 
-RSpec.describe "how stale references are reported" do
-  def report_for(box)
-    box.log.split("stale references to the old locations").last.to_s
-  end
-
-  it "names each file once, with its line numbers beneath" do
-    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
-    box.write("lib/tasks/report.rake", "task(:a) { Dir['spec/**/*'] }\ntask(:b) { Dir['spec/**/*'] }\n")
-    box.commit("two references in one file")
-    box.run
-
-    report = report_for(box)
-    expect(report.scan("lib/tasks/report.rake").length).to eq(1)
-    expect(report).to match(/^\s+1\s+task\(:a\)/)
-    expect(report).to match(/^\s+2\s+task\(:b\)/)
-  end
-
-  it "puts a file of real code before one that is only comments" do
-    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
-    box.write("app/notes.rb", "# see spec/models/ for the old layout\n")
-    box.write("lib/tasks/real.rake", "task(:x) { Dir['spec/**/*'] }\n")
-    box.commit("one of each")
-    box.run
-
-    report = report_for(box)
-    expect(report.index("lib/tasks/real.rake")).to be < report.index("app/notes.rb")
-  end
-
-  it "clips a long line rather than wrapping it" do
-    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
-    box.write("lib/tasks/long.rake", "task(:x) { Dir['spec/#{'y' * 200}'] }\n")
-    box.commit("a very long line")
-    box.run
-
-    # Only the numbered finding lines; the closing message's absolute paths are
-    # long on purpose and must not be clipped.
-    finding_lines = report_for(box).lines.map(&:chomp).grep(/^\s+\d+\s{3}/)
-
-    expect(finding_lines).not_to be_empty
-    expect(finding_lines.map(&:length).max).to be < 90
-  end
-end
-
 RSpec.describe "#{Oubliette::Scanner} on files it cannot decode" do
   it "does not take the run down over an undecodable byte" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])

@@ -5,7 +5,9 @@ require_relative "manifest"
 require_relative "mover"
 require_relative "reporter"
 require_relative "scanner"
+require_relative "test_run"
 require_relative "notice"
+require_relative "repair"
 require_relative "config/rspec"
 require_relative "config/cucumber"
 require_relative "config/cucumber_env"
@@ -311,13 +313,24 @@ module Oubliette
         findings = Scanner.new(@root, manifest).findings
         return if findings.empty?
 
-        @out.puts
-        @out.puts("stale references to the old locations -- these are yours to update")
-        @out.puts
-        @out.puts(Notice.rule)
-        render_findings(findings)
-        @out.puts
-        @out.puts(Notice.rule)
+        repair = Repair.new(@root, findings, out: @out, input: @input)
+
+        case repair.offer
+        when :nothing
+          @out.puts
+          @out.puts("stale references to the old locations -- these are yours to update")
+          @out.puts
+          @out.puts(Notice.rule)
+          render_findings(findings)
+          @out.puts
+          @out.puts(Notice.rule)
+        when :easy
+          repaired = repair.apply
+          @out.puts
+          @out.puts("updated #{repaired.length} file#{'s' unless repaired.length == 1}, originals kept as comments.")
+          @out.puts
+          TestRun.new(@root, out: @out).call
+        end
       end
 
       # Grouped by file, because the path is the repetitive part -- one run had

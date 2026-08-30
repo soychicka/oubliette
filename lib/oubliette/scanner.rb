@@ -15,7 +15,14 @@ module Oubliette
     SKIP = %w[.git node_modules tmp log vendor .oubliette public storage coverage]
            .push(HOME).freeze
 
-    Finding = Data.define(:file, :line, :path, :text)
+    Finding = Data.define(:file, :line, :path, :text, :suggestion) do
+      # A match inside a comment is far less likely to be something that must
+      # change, and some of them must not: a comment about what a generator does
+      # is not a statement about this project's layout.
+      def comment? = text.start_with?("#", "//", "/*", "*")
+
+      def fixable? = !suggestion.nil? && suggestion != text
+    end
 
     def initialize(root, manifest)
       @root = Pathname.new(root)
@@ -31,6 +38,17 @@ module Oubliette
       files.flat_map { |file| scan(file, pattern) }
     end
     private
+      # What the line would say if it named the new location instead.
+      def suggest(text)
+        moves.reduce(text) { |line, (origin, target)| PathToken.substitute(line, origin, target) }
+      end
+
+      def moves
+        @moves ||= @manifest.pairs
+                            .reject { |pair| pair.canonical? || pair.missing? }
+                            .map { |pair| [ pair.origin, pair.oubliette ] }
+      end
+
       # Only path-shaped occurrences count. "This spec was generated" and
       # "checkbox with support features" are prose, and reporting them would
       # bury the handful of references that genuinely need editing.
@@ -78,7 +96,8 @@ module Oubliette
           match = line[pattern]
           next unless match
 
-          Finding.new(file: relative, line: number, path: match, text: stripped)
+          Finding.new(file: relative, line: number, path: match, text: stripped,
+                      suggestion: suggest(stripped))
         end
       rescue ArgumentError, EncodingError, SystemCallError
         [] # binary file wearing a text extension, or one we simply cannot read
