@@ -52,9 +52,18 @@ module Oubliette
       return manifest if first_run && !@dry_run && !confirmed?(manifest)
 
       mover = Mover.new(@root, dry_run: @dry_run, logger: @log)
-      moved = move(manifest, mover)
-      write_configs(manifest)
-      stage_configs(mover, manifest)
+      done = []
+
+      begin
+        move(manifest, mover, done)
+        write_configs(manifest)
+        stage_configs(mover, manifest)
+      rescue StandardError => error
+        undo(manifest, mover, done, error)
+      end
+
+      record(manifest, done)
+      moved = done.length
       report(manifest)
       report_stale_references(manifest)
       finished(manifest) if moved.to_i.positive? && !@dry_run
@@ -111,8 +120,7 @@ module Oubliette
       manifest
     end
     private
-      def move(manifest, mover)
-        ledger = manifest.ledger
+      def move(manifest, mover, done)
         work = manifest.pairs.reject { |pair| pair.settled? || pair.canonical? || pair.configured? }
         mover.protect(manifest.pairs.flat_map { |pair| [ pair.origin, pair.current ] })
 
@@ -125,29 +133,62 @@ module Oubliette
         end
         refuse_on_conflicts!(mover, movable)
 
-        moved = 0
         movable.each do |pair|
           pair.hops.each { |from, to| mover.relocate(from, to) }
-          ledger.record!(pair.gem, pair.origin, pair.oubliette) unless @dry_run
-          moved += 1
-        # StandardError, not just Oubliette::Error: whatever went wrong, the
-        # project is now half migrated with its configuration untouched, and
-        # saying so is worth more than the original backtrace reaching rake
-        # unexplained. This was found by a file oubliette could not decode.
-        rescue StandardError => error
-          ledger.save! unless @dry_run
-          raise Error, Notice.error(
-            error.message.lines.first.to_s.chomp,
-            <<~TEXT
-              #{moved} of #{movable.length} directories had already moved when this failed, and
-              no framework configuration has been rewritten, so the suite will not run as
-              things stand. `rake oubliette:rollback` puts the moved ones back.
-            TEXT
-          )
+          done << pair
         end
+      end
 
-        ledger.save! unless @dry_run
-        moved
+      # Nothing is written down until the whole run has succeeded, so a failure
+      # can put the directories back and leave no trace of having tried.
+      def record(manifest, done)
+        return if @dry_run || done.empty?
+
+        done.each { |pair| manifest.ledger.record!(pair.gem, pair.origin, pair.oubliette) }
+        manifest.ledger.save!
+      end
+
+      # A migration that stops halfway is the worst outcome available: the
+      # directories are somewhere new and every framework still points at where
+      # they were. Rollback already knows how to reverse a move, so a failed run
+      # reverses its own instead of asking the developer to do it.
+      def undo(manifest, mover, done, error)
+        # Nothing moved, so there is nothing to undo and nothing to explain away:
+        # the collision pre-flight and the dirty-tree refusal already say exactly
+        # what is wrong, and wrapping them would throw that away.
+        raise error if @dry_run || done.empty?
+
+        restore_configs(manifest, nil)
+        mover.protect(done.flat_map { |pair| [ pair.origin, pair.current ] })
+        failed = undo_moves(mover, done)
+
+        raise Error, Notice.error(*undone_message(error, done, failed))
+      end
+
+      def undo_moves(mover, done)
+        done.reverse.filter_map do |pair|
+          mover.relocate(pair.oubliette, pair.current)
+          nil
+        rescue StandardError => undo_error
+          "  #{pair.oubliette} -> #{pair.current}: #{undo_error.message.lines.first.to_s.chomp}"
+        end
+      end
+
+      def undone_message(error, done, failed)
+        headline = error.message.lines.first.to_s.chomp
+        count = done.length
+        subject = count == 1 ? "The one directory that had moved was" : "The #{count} directories that had moved were"
+
+        if failed.empty?
+          [ headline, "Nothing was changed. #{subject} put back, and no configuration was rewritten." ]
+        else
+          [ headline, <<~TEXT ]
+            Putting things back afterwards also failed, so the project is part way
+            between the two layouts. These could not be returned:
+
+            #{failed.join("\n")}
+          TEXT
+        end
       end
 
       # Everything is checked before anything is moved. A migration that stops

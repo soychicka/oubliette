@@ -59,11 +59,4 @@ RSpec.describe "a file oubliette cannot decode" do
 
     expect(box.read("test/rspec/rails_helper.rb")).to include(%(require_relative "../../config/environment"))
   end
-
-  it "explains a mid-migration failure instead of letting it reach rake raw" do
-    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
-    allow_any_instance_of(Oubliette::Mover).to receive(:relocate).and_raise(RuntimeError, "disk went away")
-
-    expect { box.run }.to raise_error(Oubliette::Error, /rollback/)
-  end
 end

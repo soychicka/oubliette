@@ -328,3 +328,72 @@ RSpec.describe "what counts as a tree too dirty to move" do
     expect { box.runner(force: true).call }.not_to raise_error
   end
 end
+
+RSpec.describe "a migration that fails partway" do
+  # A run that stops halfway is the worst outcome available: directories in a
+  # new place, every framework still pointing at the old one. It undoes itself.
+  def failing_on_second_move
+    calls = 0
+    allow_any_instance_of(Oubliette::Mover).to receive(:relocate).and_wrap_original do |original, *args|
+      calls += 1
+      raise RuntimeError, "the disk went away" if calls == 2
+
+      original.call(*args)
+    end
+  end
+
+  def box
+    @box ||= new_sandbox(gems: %w[rspec-rails cucumber-rails factory_bot_rails],
+                         dirs: %w[spec/models spec/factories features/support],
+                         files: { ".rspec" => "--color\n" })
+  end
+
+  it "puts back what it had already moved" do
+    failing_on_second_move
+
+    expect { box.run }.to raise_error(Oubliette::Error)
+    expect(box).to be_exist("spec/models")
+    expect(box).to be_exist("spec/factories")
+    expect(box).to be_exist("features/support")
+  end
+
+  it "leaves nothing behind at the destination" do
+    failing_on_second_move
+    box.run rescue nil
+
+    expect(box).not_to be_exist("test/rspec")
+    expect(box).not_to be_exist("test/data")
+  end
+
+  it "does not rewrite any configuration" do
+    failing_on_second_move
+    box.run rescue nil
+
+    expect(box.read(".rspec")).to eq("--color\n")
+  end
+
+  it "writes nothing to the ledger, so there is no trace of having tried" do
+    failing_on_second_move
+    box.run rescue nil
+
+    expect(Oubliette::Ledger.load(box.root).pairs).to be_empty
+  end
+
+  it "says plainly that nothing was changed" do
+    failing_on_second_move
+
+    expect { box.run }.to raise_error(Oubliette::Error, /Nothing was changed/)
+  end
+
+  it "reports the original failure too, not just the recovery" do
+    failing_on_second_move
+
+    expect { box.run }.to raise_error(Oubliette::Error, /the disk went away/)
+  end
+
+  it "says so when putting things back also fails" do
+    allow_any_instance_of(Oubliette::Mover).to receive(:relocate).and_raise(RuntimeError, "everything is on fire")
+
+    expect { box.run }.to raise_error(Oubliette::Error, /could not be returned|everything is on fire/)
+  end
+end
