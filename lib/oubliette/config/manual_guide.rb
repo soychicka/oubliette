@@ -15,6 +15,8 @@ module Oubliette
     # The note is a config file like any other as far as the writer is
     # concerned, which means rollback removes it without any special handling.
     class ManualGuide < Writer
+      attr_reader :entry
+
       def initialize(root, manifest, entry:, **options)
         super(root, manifest, **options)
         @entry = entry

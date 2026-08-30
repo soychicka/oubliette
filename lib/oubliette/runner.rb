@@ -475,10 +475,13 @@ module Oubliette
         @out.puts("      what you asked for. Edit a path and rerun `rake oubliette`.")
         @out.puts("  #{Ledger.path_in(@root)}")
         @out.puts("      where everything came from. `rake oubliette:rollback` reads this.")
-        guides = manifest.manual_configs
-        guides.each do |entry|
-          @out.puts("  #{@root.join("#{entry.file}.oubliette.md")}")
-          @out.puts("      #{entry.file} is yours to update; these are the instructions.")
+        @out.puts("  #{@root.join(Paper::Recovery::FILENAME)}")
+        @out.puts("      how to undo all of it, with or without this gem installed.")
+        # Asked of the guide rather than rebuilt from the entry: this printed a
+        # filename it had worked out for itself, and the two rules had drifted.
+        manual_guides(manifest).each do |guide|
+          @out.puts("  #{@root.join(guide.filename)}")
+          @out.puts("      #{guide.entry.file} is yours to update; these are the instructions.")
         end
         @out.puts
         @out.puts(Notice.rule)

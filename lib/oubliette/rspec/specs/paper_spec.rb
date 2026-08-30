@@ -78,3 +78,23 @@ RSpec.describe Oubliette::Paper do
     expect(box.exist?(Oubliette::Paper::Readme::FILENAME)).to be(false)
   end
 end
+
+RSpec.describe "#{Oubliette::Runner} closing message" do
+  it "names files that are really there" do
+    box = new_sandbox(gems: %w[rspec-rails], packages: %w[cypress], dirs: %w[spec cypress],
+                      files: { "cypress.config.js" => "module.exports = {}\n" })
+    box.run
+
+    named = box.log.lines.filter_map { |line| line[%r{^  (/\S+)$}, 1] }
+
+    expect(named).not_to be_empty
+    expect(named.reject { |path| File.exist?(path) }).to be_empty
+  end
+
+  it "points at the recovery note" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
+    box.run
+
+    expect(box.log).to include(Oubliette::Paper::Recovery::FILENAME)
+  end
+end
