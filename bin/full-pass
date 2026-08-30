@@ -25,11 +25,45 @@ step() {
   tail -4 "$SCRATCH/step.log"
 }
 
+# A step whose exit status is not the whole story. `rake oubliette:test` passes
+# whenever every suite passes, including when a suite quietly stopped being
+# collected -- which is the failure this harness exists to catch -- so the
+# drift line has to be read as well.
+step_saying() {
+  local name="$1" pattern="$2"; shift 2
+  echo; echo "############ $name"
+  if "$@" > "$SCRATCH/step.log" 2>&1 && grep -q "$pattern" "$SCRATCH/step.log"; then
+    echo "PASS  $name" | tee -a "$RESULTS"
+  else
+    echo "FAIL  $name" | tee -a "$RESULTS"
+    echo "      expected the output to say: $pattern"
+    tail -25 "$SCRATCH/step.log"
+  fi
+  tail -4 "$SCRATCH/step.log"
+}
+
+# An assertion about the tree rather than a command to run.
+check() {
+  local name="$1"; shift
+  echo; echo "############ $name"
+  if "$@"; then
+    echo "PASS  $name" | tee -a "$RESULTS"
+  else
+    echo "FAIL  $name" | tee -a "$RESULTS"
+  fi
+}
+
+commit() {
+  git -c user.email=p@e.c -c user.name=p add -A > /dev/null 2>&1
+  git -c user.email=p@e.c -c user.name=p commit -qam "$1" > /dev/null 2>&1
+  true
+}
+
 cd "$GEM"
 # Generated apps install their own bundles and shift shared gem versions, which
 # leaves this gem's (gitignored) lockfile naming versions that are gone.
 step "0. bundle install for the gem itself" bundle install
-step "1. gem suite (151 specs)" bundle exec rspec
+step "1. gem suite" bundle exec rspec
 step "2. rubocop" bundle exec rubocop
 step "3. bin/e2e -- generated app, full migrate/retarget/reset/put_back/rollback" "$GEM/bin/e2e" "$SCRATCH"
 step "4. bin/playground -- regenerate the demo app, verified twice" "$GEM/bin/playground"
@@ -40,20 +74,51 @@ bundle install --quiet > /dev/null 2>&1
 git -c user.email=p@e.c -c user.name=p commit -qam "install oubliette" > /dev/null 2>&1
 
 step "5. every suite, before anything moves" bin/verify
-step "6. rake oubliette" bundle exec rake oubliette
-step "7. every suite, after the migration" bin/verify
-step "8. rake oubliette:selftest -- the gem's specs, no app code loaded" bundle exec rake oubliette:selftest
+step_saying "6. rake oubliette:test -- baseline counts" "no earlier run" \
+  bundle exec rake oubliette:test
+commit "baseline counts"
 
-git -c user.email=p@e.c -c user.name=p commit -qam migrated > /dev/null 2>&1
-step "9. rake oubliette:rollback" bundle exec rake oubliette:rollback
-step "10. every suite, after the rollback" bin/verify
+step "7. rake oubliette" bundle exec rake oubliette
+step "8. every suite, after the migration" bin/verify
+# The whole point of the harness: every suite passing after a move proves
+# nothing if one of them stopped finding its tests. Only the count does.
+step_saying "9. rake oubliette:test -- counts held across the move" "no drift" \
+  bundle exec rake oubliette:test
+step "10. rake oubliette:selftest -- the gem's specs, no app code loaded" bundle exec rake oubliette:selftest
 
-git -c user.email=p@e.c -c user.name=p commit -qam "rolled back" > /dev/null 2>&1
-step "11. rake oubliette -- migrate again" bundle exec rake oubliette
-step "12. rake oubliette:install_specs -- add the layout spec to the app" bundle exec rake oubliette:install_specs
-git -c user.email=p@e.c -c user.name=p commit -qam "layout spec" > /dev/null 2>&1
-step "13. the app's own suite, now including the layout spec" bundle exec rspec
-step "14. every suite once more" bin/verify
+commit "migrated"
+step "11. rake oubliette:rollback" bundle exec rake oubliette:rollback
+step "12. every suite, after the rollback" bin/verify
+step_saying "13. rake oubliette:test -- counts held across the rollback" "no drift" \
+  bundle exec rake oubliette:test
+
+commit "rolled back"
+step "14. rake oubliette -- migrate again" bundle exec rake oubliette
+step "15. rake oubliette:install_specs -- add the layout spec to the app" bundle exec rake oubliette:install_specs
+commit "layout spec"
+step "16. the app's own suite, now including the layout spec" bundle exec rspec
+step "17. every suite once more" bin/verify
+
+# The playground task's own build is covered by step 4, which runs the script it
+# shells out to. What is left is the guard: with nobody there to type YES, it
+# must refuse rather than delete a directory somebody named.
+GUARD="$SCRATCH/playground-guard"
+rm -rf "$GUARD"; mkdir -p "$GUARD"; echo "not oubliette's" > "$GUARD/keep-me.txt"
+step_saying "18. rake oubliette:playground refuses to overwrite unasked" "Remove it yourself" \
+  bundle exec rake "oubliette:playground[$GUARD]"
+check "19. it left the directory alone" test -f "$GUARD/keep-me.txt"
+
+commit "before uninstall"
+step "20. rake oubliette:uninstall -- roll back and leave" bundle exec rake oubliette:uninstall
+check "21. the suites are home again" test -d spec/models
+check "22. oubliette took its own record with it" test ! -f test/oubliette/support/rollback.yml
+check "23. it left migrate.yml, which is yours" test -f test/oubliette/migrate.yml
+
+# The layout spec asserts the migrated layout and needs the gem, which is why
+# uninstall lists it for removal rather than deleting it. Doing what the report
+# asks is part of proving the report is right.
+rm -f spec/oubliette_spec.rb
+step "24. every suite, with oubliette uninstalled" bin/verify
 
 echo; echo "################ SUMMARY"; cat "$RESULTS"
 grep -c "^PASS" "$RESULTS" | sed 's/^/passed: /'
