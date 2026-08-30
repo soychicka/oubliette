@@ -48,7 +48,7 @@ module Oubliette
         seconds = Time.now - started
 
         @out.puts(output)
-        tally = suite.tally(output)
+        tally = suite.tally(output, passed: status.success?)
 
         Runs::Result.new(suite: suite.key, passed: status.success?,
                          examples: tally[:examples], failures: tally[:failures], seconds: seconds)

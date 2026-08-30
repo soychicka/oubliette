@@ -13,12 +13,26 @@ module Oubliette
     # Every runner phrases its total differently and changes the wording between
     # major versions, so a failed parse degrades to pass or fail with a duration
     # rather than taking the run down.
-    def tally(output)
-      examples = counts[:examples]&.match(output)&.captures&.first
-      failures = counts[:failures]&.match(output)&.captures&.first
+    # Every match is summed, not just the first: `npm test` may drive two
+    # runners, and one line each is still one suite as far as this is concerned.
+    def tally(output, passed: false)
+      examples = total(output, counts[:examples])
+      failures = total(output, counts[:failures])
+      # A runner that says nothing about failures because there were none is
+      # reporting zero, not refusing to answer.
+      failures = 0 if failures.nil? && passed && !examples.nil?
 
-      { examples: examples&.to_i, failures: failures&.to_i }
+      { examples: examples, failures: failures }
     end
+    private
+      def total(output, pattern)
+        return nil if pattern.nil?
+
+        found = output.scan(pattern).flatten.compact
+        return nil if found.empty?
+
+        found.sum(&:to_i)
+      end
   end
 
   module Suites
@@ -31,9 +45,11 @@ module Oubliette
         counts: { examples: /(\d+) runs?,/, failures: /(\d+) failures?/ } }
     ].freeze
 
+    # jest says "Tests: 18 passed", jasmine says "14 specs, 0 failures", and one
+    # `npm test` may run both.
     JAVASCRIPT = {
       key: "javascript", label: "javascript", command: %w[npm test --silent],
-      counts: { examples: /Tests?:\s+(\d+)/, failures: /(\d+) failed/ }
+      counts: { examples: /Tests?:\s+(\d+)|(\d+) specs?,/, failures: /(\d+) failed|(\d+) failures?/ }
     }.freeze
 
     module_function

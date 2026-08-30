@@ -118,6 +118,27 @@ RSpec.describe "#{Oubliette::Suite} parsing counts" do
     expect(parsed[:examples]).to eq(2)
   end
 
+  it "sums every match, since npm test may drive two runners" do
+    parsed = suite(examples: /Tests?:\s+(\d+)|(\d+) specs?,/, failures: nil)
+             .tally("Tests:       18 passed\n14 specs, 0 failures\n")
+
+    expect(parsed[:examples]).to eq(32)
+  end
+
+  it "reads a silent runner that passed as zero failures" do
+    parsed = suite(examples: /(\d+) scenarios? \(/, failures: /(\d+) failed/)
+             .tally("2 scenarios (2 passed)\n", passed: true)
+
+    expect(parsed).to eq(examples: 2, failures: 0)
+  end
+
+  it "does not invent zero failures for a run that failed" do
+    parsed = suite(examples: /(\d+) scenarios? \(/, failures: /(\d+) failed/)
+             .tally("2 scenarios (2 passed)\n", passed: false)
+
+    expect(parsed[:failures]).to be_nil
+  end
+
   it "gives up quietly when the wording is not recognised" do
     parsed = suite(examples: /(\d+) examples?,/, failures: /(\d+) failures?/).tally("all good chief\n")
 
