@@ -130,7 +130,11 @@ module Oubliette
           pair.hops.each { |from, to| mover.relocate(from, to) }
           ledger.record!(pair.gem, pair.origin, pair.oubliette) unless @dry_run
           moved += 1
-        rescue Error => error
+        # StandardError, not just Oubliette::Error: whatever went wrong, the
+        # project is now half migrated with its configuration untouched, and
+        # saying so is worth more than the original backtrace reaching rake
+        # unexplained. This was found by a file oubliette could not decode.
+        rescue StandardError => error
           ledger.save! unless @dry_run
           raise Error, Notice.error(
             error.message.lines.first.to_s.chomp,

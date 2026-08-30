@@ -59,7 +59,11 @@ module Oubliette
         relative = file.relative_path_from(@root).to_s
         inside = false
 
-        file.each_line.with_index(1).filter_map do |line, number|
+        # Read as UTF-8 and scrub: a real project contains files with bytes that
+        # are not valid in whatever encoding happens to be default, and a
+        # scanner that reports references is no reason to take a migration down.
+        File.foreach(file, encoding: "UTF-8").with_index(1).filter_map do |raw, number|
+          line = raw.scrub
           stripped = line.strip
 
           if stripped.end_with?(Config::ManagedBlock::OPEN)
@@ -76,8 +80,8 @@ module Oubliette
 
           Finding.new(file: relative, line: number, path: match, text: stripped)
         end
-      rescue ArgumentError
-        [] # binary file wearing a text extension
+      rescue ArgumentError, EncodingError, SystemCallError
+        [] # binary file wearing a text extension, or one we simply cannot read
       end
   end
 end

@@ -35,12 +35,17 @@ module Oubliette
         new_dir = target.dirname
         return nil if old_dir == new_dir
 
-        source = target.read
+        # Scrubbed for the same reason the scanner scrubs: a real project holds
+        # files with bytes that are not valid in the default encoding, and a
+        # migration must not die halfway through because one of them exists.
+        source = target.read(encoding: "UTF-8").scrub
         rewritten = rewrite(source, from, old_dir, new_dir)
         return nil if rewritten == source
 
         target.write(rewritten)
         "#{to}/#{file}"
+      rescue ArgumentError, EncodingError, SystemCallError
+        nil
       end
 
       def rewrite(source, from, old_dir, new_dir)

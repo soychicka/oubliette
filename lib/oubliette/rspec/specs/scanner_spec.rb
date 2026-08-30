@@ -126,3 +126,32 @@ RSpec.describe "how stale references are reported" do
     expect(finding_lines.map(&:length).max).to be < 90
   end
 end
+
+RSpec.describe "#{Oubliette::Scanner} on files it cannot decode" do
+  it "does not take the run down over an undecodable byte" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.root.join("app/models").mkpath
+    box.root.join("app/models/binary.rb").binwrite("# spec/models \xFF\xFE not utf-8\n")
+    box.commit("a file with invalid bytes")
+
+    expect { Oubliette::Scanner.new(box.root, Oubliette::Manifest.build(box.root)).findings }.not_to raise_error
+  end
+
+  it "still finds the reference in it" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.root.join("lib").mkpath
+    box.root.join("lib/mixed.rb").binwrite("Dir['spec/**/*'] \xFF\xFE\n")
+    box.commit("valid reference, invalid bytes")
+
+    expect(Oubliette::Scanner.new(box.root, Oubliette::Manifest.build(box.root)).findings.map(&:file)).to include("lib/mixed.rb")
+  end
+
+  it "survives a genuinely binary file wearing a text extension" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.root.join("lib").mkpath
+    box.root.join("lib/blob.json").binwrite((0..255).to_a.pack("C*"))
+    box.commit("binary")
+
+    expect { Oubliette::Scanner.new(box.root, Oubliette::Manifest.build(box.root)).findings }.not_to raise_error
+  end
+end

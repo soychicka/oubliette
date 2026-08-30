@@ -39,3 +39,31 @@ RSpec.describe Oubliette::Requires do
     expect(box.read("test/rspec/rails_helper.rb")).to include('#{dir}/thing')
   end
 end
+
+RSpec.describe "a file oubliette cannot decode" do
+  it "does not take the migration down partway through" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.root.join("spec/models/binary_spec.rb").binwrite("# \xFF\xFE not utf-8\n")
+    box.commit("invalid bytes inside a moved directory")
+
+    expect { box.run }.not_to raise_error
+    expect(box).to be_exist("test/rspec/models/binary_spec.rb")
+  end
+
+  it "still rewrites the requires in its neighbours" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
+    box.root.join("spec/binary_spec.rb").binwrite("# \xFF\xFE\n")
+    box.write("spec/rails_helper.rb", %(require_relative "../config/environment"\n))
+    box.commit("one of each")
+    box.run
+
+    expect(box.read("test/rspec/rails_helper.rb")).to include(%(require_relative "../../config/environment"))
+  end
+
+  it "explains a mid-migration failure instead of letting it reach rake raw" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    allow_any_instance_of(Oubliette::Mover).to receive(:relocate).and_raise(RuntimeError, "disk went away")
+
+    expect { box.run }.to raise_error(Oubliette::Error, /rollback/)
+  end
+end
