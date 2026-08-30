@@ -116,7 +116,24 @@ module Oubliette
           return if paths.empty? || !defined?(FactoryBot)
 
           FactoryBot.definition_file_paths = paths.map { |path| Oubliette.root.join(path).to_s }
-          FactoryBot.reload if FactoryBot.respond_to?(:reload)
+          FactoryBot.reload if reload_factories?
+        end
+
+        # factory_bot_rails sets the paths in an initializer and loads them from
+        # its own `after_initialize`, which runs after this hook. Loading them
+        # here as well registers every factory twice -- `find_definitions` does
+        # not reset the registry first -- and the boot dies on
+        # `DuplicateDefinitionError` before a single example runs.
+        #
+        # So the paths are always set, and they are only re-read when something
+        # is already registered. That means the definitions were loaded before
+        # this hook ran, from the directory they used to be in, and re-reading
+        # is the whole point.
+        def reload_factories?
+          return false unless FactoryBot.respond_to?(:reload)
+          return true unless FactoryBot.respond_to?(:factories)
+
+          FactoryBot.factories.count.positive?
         end
 
         def cassettes(path)

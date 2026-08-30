@@ -45,6 +45,48 @@ RSpec.describe Oubliette::Runtime do
   end
 end
 
+# factory_bot_rails loads the definitions from its own `after_initialize`, which
+# runs after this hook. Re-reading them here as well registered every factory
+# twice and killed the boot on DuplicateDefinitionError, before a single example
+# could run. Found by migrating a real application.
+RSpec.describe "#{Oubliette::Runtime} and factory_bot" do
+  # Enough of the API for the decision under test, and none of the gem: the
+  # portable suite has to run in a process that has loaded nothing of its own.
+  def factory_bot(registered:)
+    Class.new do
+      attr_accessor :definition_file_paths
+      attr_reader :reloads
+
+      define_method(:initialize) { @reloads = 0 }
+      define_method(:factories) { Array.new(registered) }
+
+      def reload
+        @reloads += 1
+      end
+    end.new
+  end
+
+  def apply(double)
+    stub_const("FactoryBot", double)
+    Oubliette::Runtime.send(:factories, [ "test/data/factories" ])
+  end
+
+  it "sets the paths and leaves the loading to the framework" do
+    double = factory_bot(registered: 0)
+    apply(double)
+
+    expect(double.definition_file_paths).to eq([ Oubliette.root.join("test/data/factories").to_s ])
+    expect(double.reloads).to eq(0)
+  end
+
+  it "re-reads them when definitions were already loaded from the old directory" do
+    double = factory_bot(registered: 3)
+    apply(double)
+
+    expect(double.reloads).to eq(1)
+  end
+end
+
 RSpec.describe "#{Oubliette::Runtime} rspec type mappings" do
   it "names a type for every directory rspec-rails knows about" do
     expect(Oubliette::Runtime::DIRECTORY_TYPES)
