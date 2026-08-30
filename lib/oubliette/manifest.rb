@@ -157,8 +157,18 @@ module Oubliette
       self
     end
 
+    SECTIONS = [
+      [ :declared, "frameworks you declared" ],
+      [ :data, "shared test material -- fixtures, factories, helpers, output" ],
+      [ :inherited, "found on disk, or inherited through another gem" ]
+    ].freeze
+
     def render
-      <<~YAML + @data.to_yaml.sub(/\A---\n/, "")
+      [ header, "version: #{@data['version']}\n", "root: #{@data['root']}\n", gems_yaml, strays_yaml, tail ].join
+    end
+
+    def header
+      <<~YAML
         # migrate.yml -- where you want each framework's directories to live.
         #
         # Edit `oubliette:` to send a directory somewhere else, flip `enabled:`
@@ -170,6 +180,78 @@ module Oubliette
         #   rake oubliette:rollback     return everything to its `origin`
       YAML
     end
+    private
+      # Rendered a section at a time, because to_yaml will not put a comment
+      # between two entries and the headings are half the point.
+      #
+      # Entries keep the order they already have within their section, so
+      # hand-sorting survives a sync; only a newly detected framework is placed
+      # by the rule.
+      def gems_yaml
+        return "gems: {}\n" if @data["gems"].empty?
+
+        body = SECTIONS.filter_map do |section, heading|
+          entries = @data["gems"].select { |key, _| section_of(key) == section }
+          next if entries.empty?
+
+          "  # #{heading} #{'-' * [ 74 - heading.length, 3 ].max}\n" +
+            entries.map { |key, value| entry_yaml(key, value) }.join("\n")
+        end
+
+        "gems:\n#{body.join("\n")}"
+      end
+
+      def section_of(key)
+        return :data if Catalog.find(key)&.dig(:kind) == :data
+        return :declared if @data["gems"].dig(key, "tier") == "declared"
+
+        :inherited
+      end
+
+      def entry_yaml(key, value)
+        { key => value }.to_yaml.sub(/\A---\n/, "").lines.map { |line| "  #{line}" }.join
+      end
+
+      def strays_yaml
+        { "strays" => @data["strays"] }.to_yaml.sub(/\A---\n/, "")
+      end
+
+      # What oubliette knows but did not find. Listed rather than written out in
+      # full: uncommenting an entry for a framework you do not have achieves
+      # nothing, since installing it is what gets it picked up.
+      def tail
+        # Not merely absent from the file: absent and never seen. A framework
+        # you deleted on purpose belongs in neither list -- saying it was "not
+        # found here" would be untrue and would read as an invitation.
+        absent = Catalog.entries.reject do |entry|
+          @data["gems"].key?(entry[:key]) || ledger.known?(entry[:key])
+        end
+        return "" if absent.empty?
+
+        rows = absent.map do |entry|
+          origin, target = entry[:moves].first
+          format("#   %-18s %-22s ->  %s", entry[:key], origin, target)
+        end
+
+        <<~YAML
+          #{"\n"}# frameworks oubliette knows about but did not find here. Install one and
+          # rerun `rake oubliette` -- it is added above automatically, and there is
+          # nothing here to uncomment.
+          #
+          #{rows.join("\n")}
+          #
+          # To add one by hand -- a framework you do have, in a layout detection
+          # missed -- copy this shape into gems: above.
+          #
+          #   my-framework:
+          #     enabled: true
+          #     config: []
+          #     paths:
+          #     - origin: some/directory
+          #       oubliette: test/somewhere
+        YAML
+      end
+
     private
       def pair_for(key, path)
         origin = path["origin"]
@@ -210,9 +292,11 @@ module Oubliette
 
         gem = (@data["gems"][detection.key] ||= {
           "enabled" => true,
+          "tier" => detection.tier.to_s,
           "config" => detection.config.map(&:to_s),
           "paths" => []
         })
+        gem["tier"] = detection.tier.to_s
 
         detection.moves.each do |origin, oubliette|
           next if Array(gem["paths"]).any? { |path| path["origin"] == origin }

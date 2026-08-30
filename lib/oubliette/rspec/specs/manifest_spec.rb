@@ -132,3 +132,67 @@ RSpec.describe "#{Oubliette::Manifest} self-nesting" do
       .to raise_error(Oubliette::Error, /into its own subdirectory/)
   end
 end
+
+RSpec.describe "#{Oubliette::Manifest} layout" do
+  def rendered(box) = Oubliette::Manifest.build(box.root).render
+
+  def full_box
+    new_sandbox(gems: %w[rspec-rails factory_bot_rails], packages: %w[jest],
+                dirs: %w[spec/models spec/factories spec/javascript test/unit])
+  end
+
+  it "puts what you declared before what it merely found" do
+    text = rendered(full_box)
+
+    expect(text.index("frameworks you declared")).to be < text.index("shared test material")
+    expect(text.index("shared test material")).to be < text.index("found on disk")
+  end
+
+  it "files shared material apart from the runners" do
+    text = rendered(full_box)
+    data_section = text.split("shared test material").last.split("found on disk").first
+
+    expect(data_section).to include("factory_bot_rails")
+    expect(data_section).not_to include("rspec-rails")
+  end
+
+  it "files a directory with no gem behind it under what it found" do
+    text = rendered(full_box)
+
+    expect(text.split("found on disk").last).to include("test-unit")
+  end
+
+  it "records why each framework is listed" do
+    expect(rendered(full_box)).to include("tier: declared").and include("tier: disk")
+  end
+
+  it "lists what it knows but did not find, one line each" do
+    text = rendered(full_box)
+    tail = text.split("did not find here").last
+
+    expect(tail).to match(/#\s+cypress\s+cypress\s+->\s+test\/javascript\/cypress/)
+    expect(tail).to include("nothing here to uncomment")
+  end
+
+  it "offers a shape to copy for a framework detection missed" do
+    expect(rendered(full_box)).to include("my-framework:").and include("copy this shape")
+  end
+
+  it "does not list a framework you deleted as one it could not find" do
+    box = new_sandbox(gems: %w[rspec-rails cucumber-rails], dirs: %w[spec/models features/support])
+    box.run(input: box.answering("n\n"))
+    path = box.root.join(Oubliette::Manifest::PATH)
+    path.write(path.read.sub(/  cucumber-rails:\n(?:    .*\n|      .*\n)*/, ""))
+    box.commit("deleted cucumber")
+
+    expect(Oubliette::Manifest.build(box.root).render).not_to include("cucumber-rails")
+  end
+
+  it "is still valid yaml that round trips" do
+    box = full_box
+    box.run
+
+    expect { YAML.safe_load(box.read(Oubliette::Manifest::PATH), aliases: false) }.not_to raise_error
+    expect(Oubliette::Manifest.load(box.root).gems).to include("rspec-rails")
+  end
+end
