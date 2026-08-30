@@ -45,6 +45,49 @@ RSpec.describe "#{Oubliette::Scanner} noise" do
     expect(findings_for(box)).to be_empty
   end
 
+  it "does not report a dry run's config as something to fix by hand" do
+    box = new_sandbox(gems: %w[rspec-rails], packages: %w[jasmine], dirs: %w[spec spec/jasmine])
+    box.write("jasmine.json", %({\n  "spec_dir": "spec/jasmine"\n}\n))
+    manifest = Oubliette::Manifest.build(box.root)
+    previews = Oubliette::Scanner.preview_of(box.root, manifest)
+
+    findings = Oubliette::Scanner.new(box.root, manifest, previews: previews).findings
+
+    expect(findings.map(&:file)).not_to include("jasmine.json")
+  end
+
+  it "still reports a line in that same config that oubliette will not rewrite" do
+    box = new_sandbox(gems: %w[rspec-rails], packages: %w[jest], dirs: %w[spec spec/javascript])
+    box.write("package.json", <<~JSON)
+      {
+        "name": "sandbox",
+        "scripts": { "test": "jest spec/javascript" },
+        "ci": { "artifacts": "spec/javascript" }
+      }
+    JSON
+    manifest = Oubliette::Manifest.build(box.root)
+    previews = Oubliette::Scanner.preview_of(box.root, manifest)
+
+    findings = Oubliette::Scanner.new(box.root, manifest, previews: previews).findings.map(&:text)
+
+    expect(findings).to include(a_string_matching(/artifacts/))
+    expect(findings).not_to include(a_string_matching(/"test":/))
+  end
+
+  it "does not read a package name in package.json as a directory" do
+    box = new_sandbox(gems: %w[rspec-rails], packages: %w[cypress jest], dirs: %w[spec cypress])
+
+    expect(findings_for(box).map(&:text)).not_to include(a_string_matching(/"cypress":/))
+  end
+
+  it "still reports a path in the value half of a json member" do
+    box = new_sandbox(gems: %w[rspec-rails], packages: %w[jasmine], dirs: %w[spec spec/jasmine])
+    box.write("config/paths.json", %({\n  "spec_dir": "spec/jasmine"\n}\n))
+
+    finding = findings_for(box).find { |found| found.file == "config/paths.json" }
+    expect(finding.suggestion).to eq(%("spec_dir": "test/javascript/jasmine"))
+  end
+
   it "reports the old path used as a quoted directory" do
     box = sandbox(gems: %w[cucumber-rails], dirs: %w[features/support])
     box.write("lib/tasks/stats.rake", "STATS << 'features' if File.exist?('features')\n")

@@ -324,7 +324,8 @@ module Oubliette
       # that named an old path in a helper or a rake task is listed here for a
       # human to deal with.
       def report_stale_references(manifest)
-        findings = Scanner.new(@root, manifest).findings
+        previews = Scanner.preview_of(@root, manifest) if @dry_run
+        findings = Scanner.new(@root, manifest, previews: previews).findings
         return if findings.empty?
 
         repair = Repair.new(@root, findings, out: @out, input: @input)

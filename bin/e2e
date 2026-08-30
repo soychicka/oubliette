@@ -163,14 +163,45 @@ cat > spec/javascript/arithmetic.test.js <<'JS'
 test("adds", () => { expect(1 + 1).toBe(2); });
 JS
 
+# Jasmine keeps its spec directory in a config file of its own rather than in
+# package.json, so it exercises a different writer from jest's.
+mkdir -p spec/jasmine
+cat > spec/jasmine/arithmetic_spec.js <<'JS'
+describe("arithmetic", function () {
+  it("adds", function () { expect(1 + 1).toBe(2); });
+});
+JS
+
+cat > jasmine.json <<'JSON'
+{
+  "spec_dir": "spec/jasmine",
+  "spec_files": ["**/*[sS]pec.js"],
+  "random": false
+}
+JSON
+
 touch spec/vcr_cassettes/.keep spec/system/.keep test_results/.keep coverage/.keep
 
 ruby -rjson -e '
   pkg = JSON.parse(File.read("package.json")) rescue { "name" => "oubliette-e2e", "private" => true }
-  pkg["devDependencies"] = (pkg["devDependencies"] || {}).merge("jest" => "^29.0.0")
-  pkg["scripts"] = (pkg["scripts"] || {}).merge("test" => "jest spec/javascript")
+  pkg["devDependencies"] = (pkg["devDependencies"] || {}).merge("jest" => "^29.7.0", "jasmine" => "^5.5.0")
+  pkg["scripts"] = (pkg["scripts"] || {}).merge(
+    "test" => "npm run test:jest && npm run test:jasmine",
+    "test:jest" => "jest spec/javascript",
+    "test:jasmine" => "jasmine --config=jasmine.json"
+  )
   File.write("package.json", JSON.pretty_generate(pkg) + "\n")
 '
+
+echo "==> npm install"
+npm install --silent --no-audit --no-fund
+
+# node_modules is neither ours to move nor ours to commit, and left untracked it
+# would trip the dirty-tree refusal on every run.
+cat >> .gitignore <<'IGNORE'
+
+node_modules/
+IGNORE
 
 git add -A && git -c user.email=e2e@example.com -c user.name=e2e commit -qm "before oubliette"
 
@@ -178,6 +209,9 @@ echo "==> baseline"
 bundle exec rspec
 bundle exec cucumber --format progress
 bin/rails test
+# `npm test` rather than a path: oubliette rewrites the script in package.json
+# and the spec_dir in jasmine.json, so the same command has to keep working.
+npm test --silent
 
 echo "==> oubliette dry run"
 bundle exec rake oubliette:dry_run
@@ -192,6 +226,9 @@ echo "==> after migration"
 bundle exec rspec
 bundle exec cucumber --format progress
 bin/rails test
+npm test --silent
+test -d test/javascript/jasmine || { echo "jasmine specs were not moved"; exit 1; }
+grep -q "test/javascript/jasmine" jasmine.json || { echo "jasmine.json still points at spec/"; exit 1; }
 
 echo "==> selftest, with no app code loaded"
 bundle exec rake oubliette:selftest
@@ -228,5 +265,7 @@ echo "==> the suites still run once everything is back where it started"
 bundle exec rspec
 bundle exec cucumber --format progress
 bin/rails test
+npm test --silent
+grep -q "spec/jasmine" jasmine.json || { echo "rollback did not restore jasmine.json"; exit 1; }
 
 echo "==> PASS"
