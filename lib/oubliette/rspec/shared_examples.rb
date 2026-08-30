@@ -27,7 +27,11 @@ RSpec.shared_examples "an oubliette-managed project" do |project_root|
 
   it "can name an origin for every directory it has moved" do
     ledger = Oubliette::Ledger.load(root)
-    unrecorded = manifest.pairs.reject(&:canonical?).reject { |pair| ledger.current(pair.gem, pair.origin) }
+    # A configured pair is never moved and so never recorded: coverage reports
+    # are written afresh wherever the tool is pointed, which is the whole job.
+    unrecorded = manifest.pairs
+                         .reject { |pair| pair.canonical? || pair.configured? }
+                         .reject { |pair| ledger.current(pair.gem, pair.origin) }
 
     expect(unrecorded.map(&:origin)).to be_empty
   end
