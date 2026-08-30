@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "notice"
+
 module Oubliette
   # Renders what oubliette is about to do, or has just done, as a plain table.
   class Reporter
@@ -61,10 +63,14 @@ module Oubliette
 
         @out.puts
         @out.puts("CONFIG YOU MUST UPDATE BY HAND -- oubliette does not rewrite these")
+        @out.puts
+        @out.puts(Notice.rule)
         manual.each do |entry|
           moves = entry.pairs.map { |pair| "#{pair.origin} -> #{pair.oubliette}" }.join(", ")
           @out.puts("  #{entry.file} (#{entry.gem}): #{moves}")
         end
+        @out.puts
+        @out.puts(Notice.rule)
       end
 
       def warnings

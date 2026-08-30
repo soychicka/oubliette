@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "manifest"
+require_relative "notice"
 
 module Oubliette
   # Applies the parts of migrate.yml that cannot live in a config file, by
@@ -42,13 +43,14 @@ module Oubliette
         end
         return if broken.empty?
 
-        raise MissingPaths, <<~TEXT
-          oubliette: directories are missing for #{broken.join(', ')}.
-
-          migrate.yml points at paths that exist in neither their original nor
-          their new location, so the test suite cannot run. Restore the files, or
-          run `rake oubliette:rollback` and edit migrate.yml.
-        TEXT
+        raise MissingPaths, Notice.error(
+          "directories are missing for #{broken.join(', ')}.",
+          <<~TEXT
+            migrate.yml points at paths that exist in neither their original nor
+            their new location, so the test suite cannot run. Restore the files, or
+            run `rake oubliette:rollback` and edit migrate.yml.
+          TEXT
+        )
       end
 
       def configure(manifest)

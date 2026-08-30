@@ -5,6 +5,7 @@ require_relative "manifest"
 require_relative "mover"
 require_relative "reporter"
 require_relative "scanner"
+require_relative "notice"
 require_relative "config/rspec"
 require_relative "config/cucumber"
 require_relative "config/cucumber_env"
@@ -131,13 +132,14 @@ module Oubliette
           moved += 1
         rescue Error => error
           ledger.save! unless @dry_run
-          raise Error, <<~TEXT
-            #{error.message}
-
-            #{moved} of #{movable.length} directories had already moved when this failed, and
-            no framework configuration has been rewritten, so the suite will not run as
-            things stand. `rake oubliette:rollback` puts the moved ones back.
-          TEXT
+          raise Error, Notice.error(
+            error.message.lines.first.to_s.chomp,
+            <<~TEXT
+              #{moved} of #{movable.length} directories had already moved when this failed, and
+              no framework configuration has been rewritten, so the suite will not run as
+              things stand. `rake oubliette:rollback` puts the moved ones back.
+            TEXT
+          )
         end
 
         ledger.save! unless @dry_run
@@ -153,14 +155,14 @@ module Oubliette
         clashes = clashes.uniq
         return if clashes.empty?
 
-        raise Error, <<~TEXT
-          these files already exist at the destination and would be overwritten:
+        raise Error, Notice.error(
+          "these files already exist at the destination and would be overwritten.",
+          <<~TEXT
+            Nothing has been moved. Delete or rename them and run again.
 
-          #{clashes.map { |path| "  #{path}" }.join("\n")}
-
-          Nothing has been moved. Delete or rename them and run again -- generated
-          output like a coverage report is usually safe to delete.
-        TEXT
+            #{clashes.map { |path| "  #{path}" }.join("\n")}
+          TEXT
+        )
       end
 
       # Two directories heading for the same destination collide with each other
@@ -188,15 +190,16 @@ module Oubliette
         dirty = mover.unsettled_within(paths.compact.uniq)
         return if dirty.empty?
 
-        raise Error, <<~TEXT
-          these have changes git has not been told about, and they are in the way:
+        raise Error, Notice.error(
+          "there is uncommitted work inside the directories being moved.",
+          <<~TEXT
+            oubliette moves directories with `git mv`, so commit or stash these first --
+            or rerun with FORCE=1 if you know what you are doing. Uncommitted work
+            anywhere else is fine; only these directories are being moved.
 
-          #{dirty.map { |path| "  #{path}" }.join("\n")}
-
-          oubliette moves directories with `git mv`, so commit or stash them first --
-          or rerun with FORCE=1 if you know what you are doing. Uncommitted work
-          anywhere else is fine; only these directories are being moved.
-        TEXT
+            #{dirty.map { |path| "  #{path}" }.join("\n")}
+          TEXT
+        )
       end
 
       def write_configs(manifest)
@@ -256,7 +259,11 @@ module Oubliette
 
         @out.puts
         @out.puts("stale references to the old locations -- these are yours to update")
+        @out.puts
+        @out.puts(Notice.rule)
         render_findings(findings)
+        @out.puts
+        @out.puts(Notice.rule)
       end
 
       # Grouped by file, because the path is the repetitive part -- one run had
@@ -345,7 +352,11 @@ module Oubliette
         @out.puts
         @out.puts("this is what oubliette proposes, written to #{manifest.path}:")
         @out.puts
+        @out.puts(Notice.rule)
+        @out.puts
         manifest.render.each_line { |line| @out.puts("  #{line.chomp}") }
+        @out.puts
+        @out.puts(Notice.rule)
       end
 
       def declined(manifest)
@@ -376,6 +387,8 @@ module Oubliette
         @out.puts
         @out.puts("I have turned the test suite upside down, and I have done it all for you.")
         @out.puts
+        @out.puts(Notice.rule)
+        @out.puts
         @out.puts("  #{manifest.path}")
         @out.puts("      what you asked for. Edit a path and rerun `rake oubliette`.")
         @out.puts("  #{Ledger.path_in(@root)}")
@@ -385,6 +398,8 @@ module Oubliette
           @out.puts("  #{@root.join("#{entry.file}.oubliette.md")}")
           @out.puts("      #{entry.file} is yours to update; these are the instructions.")
         end
+        @out.puts
+        @out.puts(Notice.rule)
         @out.puts
         @out.puts("  rake oubliette:status     where every test directory now lives")
         @out.puts("  rake oubliette:rollback   put it all back")
