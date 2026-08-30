@@ -46,6 +46,11 @@ namespace :oubliette do
     oubliette_runner.rollback(args[:gem])
   end
 
+  desc "Build a demonstration application to try oubliette against"
+  task :playground, [ :target ] do |_task, args|
+    Oubliette::Playground.new(Oubliette.root, target: args[:target]).call
+  end
+
   desc "Put everything back and remove oubliette's own files"
   task :uninstall do
     Oubliette::Uninstall.new(Oubliette.root, force: ENV["FORCE"] == "1").call

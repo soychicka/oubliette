@@ -27,6 +27,7 @@ Gem::Specification.new do |spec|
     "lib/**/*.rb",
     "lib/**/*.rake",
     "exe/*",
+    "bin/playground",
     "README.md",
     "LICENSE.txt"
   ]

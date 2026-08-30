@@ -30,6 +30,7 @@ rake oubliette:put_back[cucumber-rails]   # return one framework
 rake oubliette:selftest  # run the gem's own specs, with no app code loaded
 rake oubliette:install_specs   # add the layout spec to this project's suite
 rake oubliette:test      # run every suite, report drift, record how long it took
+rake oubliette:playground      # build a demo application to try this on
 rake oubliette:uninstall # roll back, then remove oubliette's own files
 ```
 
@@ -144,6 +145,21 @@ keeping the decision visible in the file. `rake oubliette:reset` undoes either.
 
 Directories that look like test trees but belong to no known framework are listed
 under `strays:`, disabled, so including one is a deliberate edit.
+
+## Somewhere to try it
+
+`rake oubliette:playground` builds a small Rails application with one passing
+test per framework oubliette knows about -- rspec, minitest, cucumber, jest,
+jasmine, factory_bot, vcr, simplecov -- plus Administrate, so there is a real
+engine with its own javascript for oubliette to leave alone. Everything is green
+and in its default location, and oubliette is commented out in the Gemfile, so
+installing it is part of what you get to try.
+
+It goes next to your project rather than inside it, since a second Rails
+application under this one would turn up in every glob the first one runs. Pass
+a path to put it elsewhere: `rake "oubliette:playground[~/scratch/demo]"`.
+Building over a directory that already exists deletes it first, so that prompt
+is the one place in oubliette that will not take `y` -- it wants YES.
 
 ## Leaving
 

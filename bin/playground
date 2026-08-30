@@ -27,7 +27,7 @@ cat >> Gemfile <<'RUBY'
 
 # Uncomment, then `bundle install`, to install oubliette and get its rake tasks.
 # Everything below is already installed and green without it.
-# gem "oubliette", path: "GEM_DIR_PLACEHOLDER"
+# OUBLIETTE_LINE_PLACEHOLDER
 
 group :development, :test do
   gem "rspec-rails"
@@ -49,7 +49,16 @@ group :test do
   gem "webmock"
 end
 RUBY
-ruby -i -pe "sub(%r{GEM_DIR_PLACEHOLDER}, ENV.fetch('GEM_DIR'))" Gemfile
+# A checkout of the gem is pointed at by path so edits take effect immediately.
+# An installed copy lives somewhere no Gemfile should ever name, so it is
+# declared by version like any other dependency.
+if [ -f "$GEM_DIR/oubliette.gemspec" ]; then
+  OUBLIETTE_LINE="gem \"oubliette\", path: \"$GEM_DIR\""
+else
+  OUBLIETTE_LINE="gem \"oubliette\", \"~> $(ruby -r "$GEM_DIR/lib/oubliette/version" -e 'print Oubliette::VERSION')\""
+fi
+export OUBLIETTE_LINE
+ruby -i -pe "sub(%r{OUBLIETTE_LINE_PLACEHOLDER}, ENV.fetch('OUBLIETTE_LINE'))" Gemfile
 
 echo "==> bundle install"
 bundle install --quiet
