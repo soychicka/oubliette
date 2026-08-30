@@ -38,11 +38,12 @@ end
 # specs to drive and for oubliette to leave alone.
 gem "administrate", "~> 1.0"
 
+# capybara and selenium-webdriver are not listed: rails 8 already ships both in
+# a test group of its own, and declaring them twice makes bundler say so on
+# every single run.
 group :test do
-  gem "capybara"
   gem "cucumber-rails", require: false
   gem "database_cleaner-active_record"
-  gem "selenium-webdriver"
   gem "simplecov", require: false
   gem "vcr"
   gem "webmock"

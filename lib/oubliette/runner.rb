@@ -257,15 +257,24 @@ module Oubliette
         show_manifest(manifest)
         return proceed("not a terminal, so proceeding without asking") unless interactive?
 
-        @out.print("\ndo you want your test directories in this hierarchy? [y/N] ")
+        @out.print("\ndo you want your test directories in this hierarchy? [Y/n] ")
         @out.flush if @out.respond_to?(:flush)
 
-        if @input.gets.to_s.strip.downcase.start_with?("y")
+        if accepted?(@input.gets)
           proceed("moving everything into place")
         else
           declined(manifest)
           false
         end
+      end
+
+      # Enter accepts, because running this task is already the decision. The
+      # strictness moves to the other side: anything unrecognised declines, so a
+      # fat-fingered line cannot start a migration.
+      def accepted?(answer)
+        reply = answer.to_s.strip.downcase
+
+        reply.empty? || reply == "y" || reply == "yes"
       end
 
       def interactive?

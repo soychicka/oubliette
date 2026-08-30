@@ -48,18 +48,32 @@ RSpec.describe "the first run asks first" do
     end
 
     it "proceeds without asking again on the next run" do
-      box.run(input: box.answering("this is not a yes\n"))
+      box.run(input: box.answering("n\n"))
+
+      expect(box).to be_exist("test/rspec/models")
+    end
+  end
+
+  describe "when the answer is just Enter" do
+    it "accepts, because running the task was already the decision" do
+      box.run(input: box.answering("\n"))
 
       expect(box).to be_exist("test/rspec/models")
     end
   end
 
   describe "when the answer is neither" do
-    it "treats an empty line as no, because nothing has moved yet" do
-      box.run(input: box.answering("\n"))
+    it "declines on anything unrecognised, so a fat-fingered line moves nothing" do
+      box.run(input: box.answering("asdf\n"))
 
       expect(box).to be_exist("spec/models")
       expect(box).not_to be_exist("test/rspec")
+    end
+
+    it "declines on an explicit no" do
+      box.run(input: box.answering("n\n"))
+
+      expect(box).to be_exist("spec/models")
     end
   end
 

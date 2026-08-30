@@ -10,6 +10,7 @@ module Oubliette
     ROOT = "test"
 
     # ecosystem  :ruby | :javascript
+    # kind       :data for shared test material, otherwise a test runner
     # manual_config    config files oubliette knows about but will not rewrite
     # manual_settings  the settings in them that name a path
     # gems       names looked for in Gemfile / Gemfile.lock
@@ -25,13 +26,13 @@ module Oubliette
         config: %i[rspec]
       },
       {
-        key: "support", label: "Shared support helpers", ecosystem: :ruby,
+        key: "support", label: "Shared support helpers", ecosystem: :ruby, kind: :data,
         gems: [], paths: %w[spec/support test/support],
         moves: { "spec/support" => "test/support", "test/support" => "test/support" },
         config: %i[]
       },
       {
-        key: "factory_bot_rails", label: "FactoryBot", ecosystem: :ruby,
+        key: "factory_bot_rails", label: "FactoryBot", ecosystem: :ruby, kind: :data,
         gems: %w[factory_bot_rails factory_bot factory_girl_rails factory_girl],
         paths: %w[spec/factories test/factories factories],
         moves: {
@@ -42,7 +43,7 @@ module Oubliette
         config: %i[factory_bot]
       },
       {
-        key: "fixtures", label: "Fixtures", ecosystem: :ruby,
+        key: "fixtures", label: "Fixtures", ecosystem: :ruby, kind: :data,
         gems: [], paths: %w[test/fixtures spec/fixtures],
         moves: {
           "test/fixtures" => "test/data/fixtures",
@@ -51,7 +52,7 @@ module Oubliette
         config: %i[fixtures]
       },
       {
-        key: "attributes", label: "Attribute sets", ecosystem: :ruby,
+        key: "attributes", label: "Attribute sets", ecosystem: :ruby, kind: :data,
         gems: [], paths: %w[spec/attributes test/attributes],
         moves: {
           "spec/attributes" => "test/data/attributes",
@@ -60,7 +61,7 @@ module Oubliette
         config: %i[]
       },
       {
-        key: "exemplars", label: "Exemplars", ecosystem: :ruby,
+        key: "exemplars", label: "Exemplars", ecosystem: :ruby, kind: :data,
         gems: [], paths: %w[spec/exemplars test/exemplars],
         moves: {
           "spec/exemplars" => "test/data/exemplars",
@@ -69,7 +70,7 @@ module Oubliette
         config: %i[]
       },
       {
-        key: "seeds", label: "Test seeds", ecosystem: :ruby,
+        key: "seeds", label: "Test seeds", ecosystem: :ruby, kind: :data,
         gems: [], paths: %w[spec/seeds test/seeds db/seeds/test],
         moves: {
           "spec/seeds" => "test/data/seeds",
@@ -79,7 +80,7 @@ module Oubliette
         config: %i[]
       },
       {
-        key: "vcr", label: "VCR cassettes", ecosystem: :ruby,
+        key: "vcr", label: "VCR cassettes", ecosystem: :ruby, kind: :data,
         gems: %w[vcr], paths: %w[spec/vcr_cassettes spec/cassettes test/vcr_cassettes],
         moves: {
           "spec/vcr_cassettes" => "test/data/cassettes",
@@ -136,7 +137,7 @@ module Oubliette
         config: %i[simplecov]
       },
       {
-        key: "results", label: "Test reports and artifacts", ecosystem: :ruby,
+        key: "results", label: "Test reports and artifacts", ecosystem: :ruby, kind: :data,
         gems: [], paths: %w[test_results spec/reports test/reports tmp/screenshots],
         moves: {
           "test_results" => "test/results/reports",

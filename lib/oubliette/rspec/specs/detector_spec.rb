@@ -41,3 +41,44 @@ RSpec.describe Oubliette::Detector do
     expect(described_class.new(box.root).strays(claimed)).to eq(%w[despec unspec])
   end
 end
+
+RSpec.describe "#{Oubliette::Detector} evidence tiers" do
+  def detect(box, key)
+    Oubliette::Detector.new(box.root).detections.find { |d| d.key == key }
+  end
+
+  it "calls a gem you put in your Gemfile declared" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
+
+    expect(detect(box, "rspec-rails").tier).to eq(:declared)
+    expect(detect(box, "rspec-rails").evidence).to include("Gemfile: rspec-rails")
+  end
+
+  it "calls a gem that only reached the lockfile locked" do
+    box = sandbox(dirs: %w[test/models])
+    box.write("Gemfile", "source 'https://rubygems.org'\ngem 'rails'\n")
+    box.write("Gemfile.lock", "GEM\n  specs:\n    rails (8.0.0)\n    minitest (5.25.0)\n")
+
+    expect(detect(box, "minitest").tier).to eq(:locked)
+    expect(detect(box, "minitest").evidence).to include("Gemfile.lock: minitest")
+  end
+
+  it "does not describe a transitive gem as one you chose" do
+    box = sandbox(dirs: %w[test/models])
+    box.write("Gemfile.lock", "GEM\n  specs:\n    minitest (5.25.0)\n")
+
+    expect(detect(box, "minitest").evidence).not_to include(a_string_starting_with("Gemfile:"))
+  end
+
+  it "calls a framework known only from a directory disk" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec test/unit])
+
+    expect(detect(box, "test-unit").tier).to eq(:disk)
+  end
+
+  it "treats a package.json dependency as declared" do
+    box = sandbox(packages: %w[jest], dirs: %w[spec/javascript])
+
+    expect(detect(box, "jest").tier).to eq(:declared)
+  end
+end
