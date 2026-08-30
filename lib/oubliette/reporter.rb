@@ -7,7 +7,8 @@ module Oubliette
       pending: "move",
       settled: "in place",
       missing: "MISSING",
-      canonical: "already there"
+      canonical: "already there",
+      configured: "written here"
     }.freeze
 
     def initialize(manifest, out: $stdout)

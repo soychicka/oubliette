@@ -176,22 +176,33 @@ module Oubliette
         oubliette = path["oubliette"]
         current = ledger.current(key, origin) || origin
 
+        generated = generated?(key, origin)
+
         Pair.new(
           gem: key,
           origin: origin,
           oubliette: oubliette,
           current: current,
-          status: status_for(origin, oubliette, current)
+          status: generated ? :configured : status_for(origin, oubliette, current),
+          generated: generated
         )
       end
 
       def status_for(origin, oubliette, current)
         return :canonical if origin == oubliette
-        return @root.join(oubliette).exist? ? :settled : :missing if current == oubliette
+        return :settled if @root.join(oubliette).exist? && current == oubliette
         return :pending if @root.join(current).exist?
         return :settled if @root.join(oubliette).exist?
+        # The destination is gone but the origin is back: something outside
+        # oubliette reverted the move -- a git reset, most likely -- and this
+        # needs migrating again rather than being reported as lost.
+        return :pending if @root.join(origin).exist?
 
         :missing
+      end
+
+      def generated?(key, origin)
+        Array(Catalog.find(key)&.dig(:generated)).include?(origin)
       end
 
       def merge_detection(detection)

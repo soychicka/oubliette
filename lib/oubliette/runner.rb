@@ -109,7 +109,7 @@ module Oubliette
     private
       def move(manifest, mover)
         ledger = manifest.ledger
-        work = manifest.pairs.reject { |pair| pair.settled? || pair.canonical? }
+        work = manifest.pairs.reject { |pair| pair.settled? || pair.canonical? || pair.configured? }
         mover.protect(manifest.pairs.flat_map { |pair| [ pair.origin, pair.current ] })
 
         @out.puts
@@ -145,7 +145,9 @@ module Oubliette
       # halfway leaves directories in their new homes and the configuration
       # still pointing at the old ones, which is worse than not starting.
       def refuse_on_conflicts!(mover, pairs)
-        clashes = pairs.flat_map { |pair| pair.hops.flat_map { |from, to| mover.conflicts(from, to) } }.uniq
+        clashes = pairs.flat_map { |pair| pair.hops.flat_map { |from, to| mover.conflicts(from, to) } }
+        clashes += converging(mover, pairs)
+        clashes = clashes.uniq
         return if clashes.empty?
 
         raise Error, <<~TEXT
@@ -156,6 +158,22 @@ module Oubliette
           Nothing has been moved. Delete or rename them and run again -- generated
           output like a coverage report is usually safe to delete.
         TEXT
+      end
+
+      # Two directories heading for the same destination collide with each other
+      # rather than with anything on disk, so there is nothing to compare against
+      # until the first has already moved. Compare their contents instead.
+      def converging(mover, pairs)
+        pairs.group_by(&:oubliette).flat_map do |target, group|
+          next [] if group.length < 2
+
+          seen = {}
+          group.flat_map do |pair|
+            mover.files_in(pair.current).filter_map do |file|
+              seen.key?(file) ? "#{target}/#{file}" : (seen[file] = true and nil)
+            end
+          end
+        end
       end
 
       def ensure_movable!

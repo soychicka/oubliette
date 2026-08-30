@@ -107,7 +107,8 @@ module Oubliette
             origin: path["origin"],
             oubliette: path["origin"],
             current: path["oubliette"],
-            status: status_for(path)
+            status: status_for(path),
+            generated: false
           )
         end
       end.sort_by { |pair| [ -pair.origin.count("/"), pair.origin ] }

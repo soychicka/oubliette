@@ -72,6 +72,17 @@ module Oubliette
       collisions(source, target)
     end
 
+    # The files a directory would contribute to its destination, relative to it.
+    # Placeholders are left out: one .keep replaces another without complaint.
+    def files_in(from)
+      source = @root.join(from)
+      return [] unless source.directory?
+
+      source.glob("**/*", File::FNM_DOTMATCH)
+            .select { |path| path.file? && !placeholder?(path) }
+            .map { |path| path.relative_path_from(source).to_s }
+    end
+
     def relocate(from, to)
       source = @root.join(from)
       target = @root.join(to)
@@ -202,9 +213,9 @@ module Oubliette
         git_rm(child) || child.delete
       end
 
-      def placeholder?(path)
-        PLACEHOLDERS.include?(path.basename.to_s) && path.file? && path.size.zero?
-      end
+    def placeholder?(path)
+      PLACEHOLDERS.include?(path.basename.to_s) && path.file? && path.size.zero?
+    end
 
       def git_rm(path)
         return false unless git?

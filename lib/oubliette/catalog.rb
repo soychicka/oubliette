@@ -11,6 +11,7 @@ module Oubliette
 
     # ecosystem  :ruby | :javascript
     # kind       :data for shared test material, otherwise a test runner
+    # generated  origins written by a tool: configure the destination, never move
     # manual_config    config files oubliette knows about but will not rewrite
     # manual_settings  the settings in them that name a path
     # gems       names looked for in Gemfile / Gemfile.lock
@@ -134,6 +135,7 @@ module Oubliette
         key: "simplecov", label: "SimpleCov", ecosystem: :ruby,
         gems: %w[simplecov], paths: %w[coverage],
         moves: { "coverage" => "test/results/coverage" },
+        generated: %w[coverage],
         config: %i[simplecov]
       },
       {
@@ -145,6 +147,7 @@ module Oubliette
           "test/reports" => "test/results/reports",
           "tmp/screenshots" => "test/results/screenshots"
         },
+        generated: %w[tmp/screenshots],
         config: %i[]
       },
       {
