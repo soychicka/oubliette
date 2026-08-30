@@ -27,9 +27,14 @@ module Oubliette
         config: %i[rspec]
       },
       {
-        key: "support", label: "Shared support helpers", ecosystem: :ruby, kind: :data,
+        key: "support", label: "Support helpers", ecosystem: :ruby,
         gems: [], paths: %w[spec/support test/support],
-        moves: { "spec/support" => "test/support", "test/support" => "test/support" },
+        # spec/support is an rspec convention, not shared material: cucumber has
+        # features/support and minitest has test/. Hoisting rspec's out to a
+        # top-level test/support treated it differently from cucumber's, which
+        # travels inside its own tree, and broke the conventional
+        # `Dir[Rails.root.join("spec/support/**/*.rb")]` for no gain.
+        moves: { "spec/support" => "test/rspec/support", "test/support" => "test/support" },
         config: %i[]
       },
       {

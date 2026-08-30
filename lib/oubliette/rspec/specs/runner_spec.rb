@@ -31,7 +31,7 @@ RSpec.describe Oubliette::Runner do
     expect(box).to be_exist("test/data/attributes")
     expect(box).to be_exist("test/data/fixtures")
     expect(box).to be_exist("test/data/cassettes")
-    expect(box).to be_exist("test/support")
+    expect(box).to be_exist("test/rspec/support")
     expect(box).to be_exist("test/rspec/system")
     expect(box).to be_exist("test/cucumber/features/step_definitions")
     expect(box).to be_exist("test/javascript/jest")

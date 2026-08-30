@@ -196,3 +196,40 @@ RSpec.describe "#{Oubliette::Manifest} layout" do
     expect(Oubliette::Manifest.load(box.root).gems).to include("rspec-rails")
   end
 end
+
+RSpec.describe "where support helpers belong" do
+  # spec/support is rspec's own convention, the way features/support is
+  # cucumber's. Hoisting one out to a shared top level while the other travelled
+  # inside its tree treated the same thing two different ways.
+  it "keeps rspec's support inside the rspec tree" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models spec/support])
+    box.run
+
+    expect(box).to be_exist("test/rspec/support")
+    expect(box).not_to be_exist("test/support")
+  end
+
+  it "keeps cucumber's support inside the cucumber tree, as it already did" do
+    box = sandbox(gems: %w[cucumber-rails], dirs: %w[features/support])
+    box.run
+
+    expect(box).to be_exist("test/cucumber/features/support")
+  end
+
+  it "leaves minitest's own test/support where it is" do
+    box = sandbox(gems: %w[minitest], dirs: %w[test/models test/support])
+    box.run
+
+    expect(box).to be_exist("test/support")
+  end
+
+  it "still treats genuinely shared material as shared" do
+    box = sandbox(gems: %w[rspec-rails factory_bot_rails vcr],
+                  dirs: %w[spec/models spec/factories spec/vcr_cassettes spec/attributes])
+    box.run
+
+    expect(box).to be_exist("test/data/factories")
+    expect(box).to be_exist("test/data/cassettes")
+    expect(box).to be_exist("test/data/attributes")
+  end
+end

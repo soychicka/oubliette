@@ -73,14 +73,19 @@ you can edit it and rerun.
 
 ```yaml
 gems:
+  # frameworks you declared -----------------------------------------------
   rspec-rails:
     enabled: true
+    tier: declared
     config: [rspec]
     paths:
     - origin: spec
       oubliette: test/rspec
+
+  # shared test material -- fixtures, factories, helpers, output ----------
   factory_bot_rails:
     enabled: true
+    tier: declared
     config: [factory_bot]
     paths:
     - origin: spec/factories
@@ -88,6 +93,11 @@ gems:
     - origin: test/factories
       oubliette: test/data/factories
 ```
+
+`tier` records how oubliette knows about a framework: `declared` if you named it,
+`locked` if it arrived as another gem's dependency, `disk` if only a directory
+gave it away. The sections are ordered by it, and the file ends with a list of
+what oubliette knows but did not find here.
 
 **rollback.yml is oubliette's.** It records the same pairs, but `oubliette` is
 where each directory *actually is*, and `origin` is the framework's own default
@@ -138,7 +148,8 @@ under `strays:`, disabled, so including one is a deliberate edit.
 ```
 test/
 ├── rspec/            spec/
-│   └── system/       spec/system, spec/features
+│   ├── system/       spec/system, spec/features
+│   └── support/      spec/support
 ├── minitest/         test/models, test/controllers, ...
 ├── unit/             test/unit
 ├── system/           test/system, Rails' own system tests
@@ -154,7 +165,7 @@ test/
 │   ├── seeds/        spec/seeds, db/seeds/test
 │   ├── cassettes/    spec/vcr_cassettes
 │   └── exemplars/    spec/exemplars
-├── support/          spec/support, test/support
+├── support/          test/support, minitest's own
 └── results/          test_results/, coverage/, screenshots
 ```
 
