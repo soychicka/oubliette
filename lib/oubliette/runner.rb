@@ -65,6 +65,7 @@ module Oubliette
       end
 
       record(manifest, done)
+      refresh_papers(manifest.ledger)
       moved = done.length
       report(manifest)
       report_stale_references(manifest)
@@ -111,7 +112,10 @@ module Oubliette
       end
 
       stage_configs(mover, manifest)
-      ledger.save! unless @dry_run
+      unless @dry_run
+        ledger.save!
+        refresh_papers(ledger)
+      end
       ledger
     end
     alias put_back rollback
@@ -148,6 +152,16 @@ module Oubliette
 
         done.each { |pair| manifest.ledger.record!(pair.gem, pair.origin, pair.oubliette) }
         manifest.ledger.save!
+      end
+
+      # The README and the recovery note describe where things are, so they are
+      # rewritten from the ledger every time that changes -- and deleted once
+      # nothing is displaced, since a recovery note for an empty oubliette is
+      # just something else to be out of date.
+      def refresh_papers(ledger)
+        return if @dry_run
+
+        Paper.refresh(@root, ledger, out: @out)
       end
 
       # A migration that stops halfway is the worst outcome available: the

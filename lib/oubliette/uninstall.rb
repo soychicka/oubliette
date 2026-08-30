@@ -2,6 +2,7 @@
 
 require "fileutils"
 require_relative "ledger"
+require_relative "paper"
 require_relative "manifest"
 require_relative "notice"
 require_relative "runner"
@@ -87,9 +88,14 @@ module Oubliette
         []
       end
 
-      # Anything still here after the rollback is a guide somebody wrote in.
+      # Anything still here after the rollback is a guide somebody wrote in --
+      # the rollback removes the untouched ones, and takes its own README and
+      # recovery note with them.
       def modified_guides
-        @root.glob("#{HOME}/*.md").map { |path| [ path.relative_path_from(@root).to_s, "a guide you have edited" ] }
+        @root.glob("#{HOME}/*.md")
+             .map { |path| path.relative_path_from(@root).to_s }
+             .reject { |path| Paper.filenames.include?(path) }
+             .map { |path| [ path, "a guide you have edited" ] }
       end
 
       def backups

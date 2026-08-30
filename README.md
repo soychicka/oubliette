@@ -161,6 +161,21 @@ a path to put it elsewhere: `rake "oubliette:playground[~/scratch/demo]"`.
 Building over a directory that already exists deletes it first, so that prompt
 is the one place in oubliette that will not take `y` -- it wants YES.
 
+## What is left in test/oubliette
+
+Two documents, both written by oubliette and rewritten on every run:
+
+- `README.md` explains the directory to whoever opens it next, and lists every
+  framework that was moved -- separating the ones whose configuration was
+  rewritten for you from the four javascript ones you have to finish by hand.
+- `RECOVERY.md` is how to undo all of it, including with no gem installed: the
+  origin of every directory, and the markers to search your config files for.
+
+Both say at the top that edits to them are overwritten, because they are only
+worth anything while they match where the directories actually are. Both are
+deleted once nothing is displaced -- a recovery note for an empty oubliette is
+one more thing to be out of date.
+
 ## Leaving
 
 `rake oubliette:uninstall` is a rollback that also takes oubliette out of the

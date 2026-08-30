@@ -226,14 +226,14 @@ RSpec.describe Oubliette::Config::ManualGuide do
     box = new_sandbox(packages: %w[jest], dirs: %w[spec/javascript])
     box.run
 
-    expect(box.root.glob("test/oubliette/*.md")).to be_empty
+    expect(guides_in(box)).to be_empty
   end
 
   it "writes nothing when the project has no such config file" do
     box = new_sandbox(packages: %w[cypress], dirs: %w[cypress])
     box.run
 
-    expect(box.root.glob("test/oubliette/*.md")).to be_empty
+    expect(guides_in(box)).to be_empty
   end
 end
 

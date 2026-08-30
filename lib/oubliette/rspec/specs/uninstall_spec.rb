@@ -45,7 +45,7 @@ RSpec.describe Oubliette::Uninstall do
                       files: { "vitest.config.js" => "export default {}\n",
                                "cypress.config.js" => "module.exports = {}\n" })
     box.run
-    guides = box.root.glob("#{Oubliette::HOME}/*.md")
+    guides = guides_in(box)
     expect(guides.length).to eq(2)
     guides.first.write("#{guides.first.read}\nDone on Tuesday. Also had to fix the CI cache.\n")
 

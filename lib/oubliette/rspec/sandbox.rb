@@ -140,6 +140,13 @@ module Oubliette
         @sandbox ||= Sandbox.create(**options).tap { |built| SandboxHelpers.open << built }
       end
 
+      # The notes oubliette leaves beside a config file it will not rewrite,
+      # without its own README and recovery note, which live in the same place.
+      def guides_in(box)
+        box.root.glob("#{Oubliette::HOME}/*.md")
+           .reject { |path| Oubliette::Paper.filenames.include?(path.relative_path_from(box.root).to_s) }
+      end
+
       def new_sandbox(**options)
         Sandbox.create(**options).tap { |built| SandboxHelpers.open << built }
       end
