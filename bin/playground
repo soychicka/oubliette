@@ -477,6 +477,11 @@ require "rails_helper"
 # Ported from administrate's spec/features/search_spec.rb. The filter tooltip is
 # the engine's tooltip_controller, driving the native popover API.
 RSpec.describe "admin widget search", type: :system do
+  # Searching prints a Rails 8.2 deprecation warning. It is not from this spec:
+  # administrate-1.0.0/lib/administrate/search.rb:114 calls String#mb_chars, and
+  # rails attributes the warning to the nearest application frame, which is the
+  # visit below. 1.0.0 is the latest release, so there is no upgrade that fixes
+  # it -- administrate's search will break on Rails 8.2. Left visible on purpose.
   it "finds a widget by name" do
     create(:widget, name: "Bracket")
     create(:widget, name: "Grommet")

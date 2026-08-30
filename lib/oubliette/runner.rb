@@ -20,6 +20,9 @@ module Oubliette
   # same command serve as the first migration, the sync after installing a new
   # framework, and the way you apply an edit.
   class Runner
+    FINDINGS_SHOWN = 40
+    FINDING_WIDTH = 68
+
     def initialize(root, dry_run: false, out: $stdout, input: $stdin, force: false)
       @root = Pathname.new(root)
       @dry_run = dry_run
@@ -253,10 +256,38 @@ module Oubliette
 
         @out.puts
         @out.puts("stale references to the old locations -- these are yours to update")
-        findings.first(40).each do |finding|
-          @out.puts(format("  %s:%d  %s", finding.file, finding.line, finding.text))
+        render_findings(findings)
+      end
+
+      # Grouped by file, because the path is the repetitive part -- one run had
+      # the same helper listed six times -- and because a flat table would push
+      # the matched text past column fifty and leave nothing to read.
+      #
+      # Files holding real code come first: a match inside a comment is far less
+      # likely to be something you must act on.
+      def render_findings(findings)
+        shown = findings.first(FINDINGS_SHOWN)
+        grouped = shown.group_by(&:file)
+        ordered = grouped.sort_by { |file, group| [ group.all? { |f| comment?(f) } ? 1 : 0, file ] }
+
+        ordered.each do |file, group|
+          @out.puts
+          @out.puts("  #{file}")
+          group.each { |finding| @out.puts(format("  %5d   %s", finding.line, clip(finding.text))) }
         end
-        @out.puts("  ... and #{findings.length - 40} more") if findings.length > 40
+
+        return if findings.length <= FINDINGS_SHOWN
+
+        @out.puts
+        @out.puts("  ...and #{findings.length - FINDINGS_SHOWN} more")
+      end
+
+      def comment?(finding)
+        finding.text.start_with?("#", "//", "/*", "*")
+      end
+
+      def clip(text)
+        text.length > FINDING_WIDTH ? "#{text[0, FINDING_WIDTH - 1]}\u2026" : text
       end
 
       def prepared(manifest)
