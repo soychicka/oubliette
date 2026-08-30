@@ -26,15 +26,23 @@ module Oubliette
       # finishes, so it is not left to be stumbled upon.
       def filename = "#{HOME}/#{@entry.file.tr('/', '-')}.md"
 
-      # The whole file is oubliette's, so a rollback removes it outright rather
-      # than trying to restore anything from inside it.
+      # The whole file is oubliette's, so a rollback removes it outright --
+      # but only while it still says exactly what oubliette wrote. A guide is
+      # the natural place to jot down what you worked out while following it,
+      # and those notes are the developer's, not oubliette's, so an edited
+      # guide is left where it is and named in the report instead.
       def revert
         target = @root.join(filename)
         return :unchanged unless target.file?
 
-        @log.call("  #{filename}: removed, the config it describes was never touched")
-        remove
-        :restored
+        if target.read == render(nil)
+          @log.call("  #{filename}: removed, the config it describes was never touched")
+          remove
+          :restored
+        else
+          @log.call("  #{filename}: kept, you have edited it")
+          :unchanged
+        end
       end
 
       def render(_current)

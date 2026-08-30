@@ -29,6 +29,8 @@ rake oubliette:rollback  # return everything to its origin
 rake oubliette:put_back[cucumber-rails]   # return one framework
 rake oubliette:selftest  # run the gem's own specs, with no app code loaded
 rake oubliette:install_specs   # add the layout spec to this project's suite
+rake oubliette:test      # run every suite, report drift, record how long it took
+rake oubliette:uninstall # roll back, then remove oubliette's own files
 ```
 
 `rake oubliette --dry-run` works too; the task takes rake's own flag over.
@@ -143,6 +145,22 @@ keeping the decision visible in the file. `rake oubliette:reset` undoes either.
 Directories that look like test trees but belong to no known framework are listed
 under `strays:`, disabled, so including one is a deliberate edit.
 
+## Leaving
+
+`rake oubliette:uninstall` is a rollback that also takes oubliette out of the
+project. It asks first, and the question names no paths, because on a project of
+any size that list is a wall of text in front of a yes/no. The report comes after.
+
+Only one file is deleted automatically: `rollback.yml`, which is oubliette's
+bookkeeping and nobody else's, and only once every directory is home and every
+config restored. Everything else is listed for you to remove or keep, because
+each one has something of yours in it -- migrate.yml is your configuration, the
+test log is your history, an edited guide is your notes, the layout spec is a
+test in your suite, and `test/` itself may well predate oubliette.
+
+Then remove `gem "oubliette"` from your Gemfile. Nothing left behind depends on
+it.
+
 ## Layout
 
 ```
@@ -240,8 +258,11 @@ e2e: { specPattern: "test/javascript/cypress/**/*" }
 ```
 
 The note is treated as a config file oubliette owns, so `rake oubliette:rollback`
-deletes it along with putting the directories back. The run also lists them under
-"CONFIG YOU MUST UPDATE BY HAND" so they are not discovered by surprise.
+deletes it along with putting the directories back -- but only while it still says
+exactly what oubliette wrote. A guide is a natural place to jot down what you
+worked out while following it, so an edited one is kept and named in the report
+instead. The run also lists them under "CONFIG YOU MUST UPDATE BY HAND" so they
+are not discovered by surprise.
 
 Oubliette rewrites framework configuration and repairs ruby's `require_relative`
 when a directory changes depth. It does not rewrite application code, and it does

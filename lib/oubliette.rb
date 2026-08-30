@@ -53,6 +53,8 @@ require_relative "oubliette/scanner"
 require_relative "oubliette/suite"
 require_relative "oubliette/runs"
 require_relative "oubliette/test_run"
+require_relative "oubliette/repair"
 require_relative "oubliette/runner"
+require_relative "oubliette/uninstall"
 require_relative "oubliette/runtime"
 require_relative "oubliette/railtie" if defined?(Rails::Railtie)
