@@ -155,13 +155,33 @@ module Oubliette
       end
     end
 
+    # Work git has not been told about, inside the directories this run touches.
+    # Uncommitted changes to a Gemfile, or to anything else the migration cannot
+    # affect, are none of oubliette's business.
+    def unsettled_within(paths)
+      porcelain.filter_map do |line|
+        next unless line.start_with?("??") || line[1] != " "
+
+        path = path_of(line)
+        next unless paths.any? { |dir| touching?(path, dir) }
+
+        path
+      end.uniq
+    end
+
+    def path_of(line)
+      line[3..].to_s.split(" -> ").last.delete_prefix('"').delete_suffix('"')
+    end
+
+    def touching?(path, dir)
+      path == dir || path.start_with?("#{dir}/") || dir.start_with?(path.chomp("/"))
+    end
+
     def porcelain
       return [] unless git?
 
       stdout, = Open3.capture2("git", "-C", @root.to_s, "status", "--porcelain")
-      stdout.lines.map(&:chomp).reject(&:empty?).reject do |line|
-        owned?(line[3..].to_s.split(" -> ").last.delete_prefix('"').delete_suffix('"'))
-      end
+      stdout.lines.map(&:chomp).reject(&:empty?).reject { |line| owned?(path_of(line)) }
     end
 
     # git reports a wholly untracked directory as the directory, so the first

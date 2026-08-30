@@ -2,6 +2,7 @@
 
 require "pathname"
 require_relative "path_token"
+require_relative "config/managed_block"
 
 module Oubliette
   # Finds hardcoded references to the old locations that survived the move.
@@ -51,14 +52,29 @@ module Oubliette
         SKIP.any? { |dir| relative == dir || relative.start_with?("#{dir}/") }
       end
 
+      # Everything between oubliette's own markers was written by oubliette,
+      # including the `was:` line, whose entire purpose is to hold the old path.
+      # Reporting our own annotations back as your problem is noise we generate.
       def scan(file, pattern)
         relative = file.relative_path_from(@root).to_s
+        inside = false
 
         file.each_line.with_index(1).filter_map do |line, number|
+          stripped = line.strip
+
+          if stripped.end_with?(Config::ManagedBlock::OPEN)
+            inside = true
+            next
+          elsif stripped.end_with?(Config::ManagedBlock::CLOSE)
+            inside = false
+            next
+          end
+          next if inside
+
           match = line[pattern]
           next unless match
 
-          Finding.new(file: relative, line: number, path: match, text: line.strip)
+          Finding.new(file: relative, line: number, path: match, text: stripped)
         end
       rescue ArgumentError
         [] # binary file wearing a text extension

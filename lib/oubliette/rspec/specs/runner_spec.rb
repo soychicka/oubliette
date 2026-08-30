@@ -143,7 +143,7 @@ RSpec.describe Oubliette::Runner do
     box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.touch("spec/models/user_spec.rb")
 
-    expect { box.run }.to raise_error(Oubliette::Error, /unstaged or untracked/)
+    expect { box.run }.to raise_error(Oubliette::Error, %r{spec/models/user_spec\.rb})
     expect(box).to be_exist("spec/models")
   end
 
@@ -289,5 +289,42 @@ RSpec.describe "a migration reverted from outside" do
     statuses = box.manifest.pairs.map(&:status)
     expect(statuses).to all(eq(:pending))
     expect(box.manifest.missing).to be_empty
+  end
+end
+
+RSpec.describe "what counts as a tree too dirty to move" do
+  # Installing the gem edits the Gemfile, so the very first thing a user does
+  # guaranteed a refusal. Work oubliette cannot affect is none of its business.
+  it "does not care about uncommitted work outside the directories being moved" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.write("Gemfile", "#{box.read('Gemfile')}gem 'oubliette'\n")
+    box.write("app/models/user.rb", "class User; end\n")
+
+    expect { box.run }.not_to raise_error
+    expect(box).to be_exist("test/rspec/models")
+  end
+
+  it "still refuses when the work is inside a directory it is about to move" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.touch("spec/models/user_spec.rb")
+
+    expect { box.run }.to raise_error(Oubliette::Error, %r{spec/models/user_spec\.rb})
+  end
+
+  it "names what is in the way rather than saying the tree is dirty" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.touch("spec/models/one_spec.rb")
+    box.touch("spec/models/two_spec.rb")
+
+    expect { box.run }.to raise_error(Oubliette::Error) { |error|
+      expect(error.message).to include("one_spec.rb").and include("two_spec.rb")
+    }
+  end
+
+  it "can still be overridden" do
+    box = new_sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.touch("spec/models/user_spec.rb")
+
+    expect { box.runner(force: true).call }.not_to raise_error
   end
 end

@@ -52,3 +52,34 @@ RSpec.describe "#{Oubliette::Scanner} noise" do
     expect(findings_for(box).map(&:file)).to eq(%w[lib/tasks/stats.rake])
   end
 end
+
+RSpec.describe "#{Oubliette::Scanner} and oubliette's own writing" do
+  it "does not report the annotations oubliette put in a config file" do
+    box = sandbox(gems: %w[cucumber-rails], dirs: %w[features/support],
+                  files: { "cucumber.yml" => "default: -r features/support --strict features\n" })
+    box.run
+
+    findings = Oubliette::Scanner.new(box.root, box.manifest).findings
+
+    expect(findings.map(&:file)).not_to include("cucumber.yml")
+  end
+
+  it "does not report the was: line, whose purpose is to hold the old path" do
+    box = sandbox(gems: %w[cucumber-rails], dirs: %w[features/support],
+                  files: { "cucumber.yml" => "default: -r features/support --strict features\n" })
+    box.run
+
+    expect(box.read("cucumber.yml")).to include("# was: default: -r features/support")
+    expect(Oubliette::Scanner.new(box.root, box.manifest).findings).to be_empty
+  end
+
+  it "still reports a real reference in the same file, outside the block" do
+    box = sandbox(gems: %w[cucumber-rails], dirs: %w[features/support],
+                  files: { "cucumber.yml" => "default: -r features/support --strict features\n" })
+    box.run
+    box.write("cucumber.yml", "#{box.read('cucumber.yml')}smoke: --tags @smoke features/smoke\n")
+
+    expect(Oubliette::Scanner.new(box.root, box.manifest).findings.map(&:file))
+      .to include("cucumber.yml")
+  end
+end

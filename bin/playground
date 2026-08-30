@@ -971,7 +971,7 @@ echo
 echo "  to demo the install:"
 echo "    uncomment the oubliette line in Gemfile"
 echo "    bundle install"
-echo "    git commit -am 'install oubliette'   # it refuses to move a dirty tree"
+echo "    git commit -am 'install oubliette'   # optional; the Gemfile no longer blocks it"
 echo "    bundle exec rake oubliette:dry_run     see what it would do"
 echo "    bundle exec rake oubliette             do it"
 echo "    bin/verify                             every suite, after"

@@ -40,10 +40,10 @@ module Oubliette
     end
 
     def call
-      ensure_movable!
       first_run = !Manifest.exists_in?(@root)
       manifest = Manifest.build(@root)
       manifest.save! unless @dry_run
+      ensure_movable!(manifest.pairs.reject(&:configured?).flat_map { |pair| [ pair.origin, pair.current, pair.oubliette ] })
 
       return manifest if first_run && !@dry_run && !confirmed?(manifest)
 
@@ -72,9 +72,9 @@ module Oubliette
     # location, as recorded in rollback.yml when they were first moved. What
     # migrate.yml says is irrelevant here, deliberately.
     def rollback(key = nil)
-      ensure_movable!
       manifest = Manifest.exists_in?(@root) ? Manifest.load(@root) : Manifest.new(@root, {})
       ledger = Ledger.load(@root)
+      ensure_movable!(ledger.pairs(only: key).flat_map { |pair| [ pair.origin, pair.current ] })
       mover = Mover.new(@root, dry_run: @dry_run, logger: @log)
 
       @out.puts(@dry_run ? "would roll back" : "rolling back")
@@ -176,17 +176,23 @@ module Oubliette
         end
       end
 
-      def ensure_movable!
+      def ensure_movable!(paths)
         return if @dry_run || @force
 
         mover = Mover.new(@root)
-        return if !mover.git? || mover.stable?
+        return unless mover.git?
+
+        dirty = mover.unsettled_within(paths.compact.uniq)
+        return if dirty.empty?
 
         raise Error, <<~TEXT
-          the working tree has unstaged or untracked changes.
+          these have changes git has not been told about, and they are in the way:
 
-          oubliette moves directories with `git mv`, so commit or stash first --
-          or rerun with FORCE=1 if you know what you are doing.
+          #{dirty.map { |path| "  #{path}" }.join("\n")}
+
+          oubliette moves directories with `git mv`, so commit or stash them first --
+          or rerun with FORCE=1 if you know what you are doing. Uncommitted work
+          anywhere else is fine; only these directories are being moved.
         TEXT
       end
 
