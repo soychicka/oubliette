@@ -64,6 +64,11 @@ module Oubliette
         Manifest.load(@root)
       end
 
+      # For examples that never ran a migration and so have no migrate.yml.
+      def manifest_built
+        Manifest.build(@root)
+      end
+
       def exist?(path) = @root.join(path).exist?
 
       def read(path) = @root.join(path).read

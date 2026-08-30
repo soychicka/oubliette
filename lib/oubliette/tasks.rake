@@ -56,6 +56,12 @@ namespace :oubliette do
     oubliette_runner.reset(args[:gem])
   end
 
+  desc "Run every test suite this project has, and report what changed since last time"
+  task :test, [ :suite ] do |_task, args|
+    ok = Oubliette::TestRun.new(Oubliette.root, only: args[:suite]).call
+    abort unless ok
+  end
+
   desc "Run oubliette's own specs in a process that loads none of this application"
   task :selftest do
     require "oubliette/rspec"
