@@ -24,8 +24,12 @@ module Oubliette
     # application asking at runtime wants the directory that exists, not the one
     # somebody has typed into the manifest but not yet applied. Returns nil when
     # oubliette has never run here.
+    # Where a framework's directories are now, or nil to say "wherever your
+    # framework puts them". Callers pair this with their own default, so nil
+    # has to mean nothing moved -- never a guess at where a migration would
+    # have put things had it run.
     def path(key)
-      return nil unless Manifest.exists_in?(root)
+      return nil unless Manifest.exists_in?(root) && Ledger.displaced?(root)
 
       location = Manifest.load(root).location(key)
       location && root.join(location)

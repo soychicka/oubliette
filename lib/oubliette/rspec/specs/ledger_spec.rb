@@ -51,14 +51,42 @@ RSpec.describe "#{Oubliette}.path" do
     Oubliette.root = nil
   end
 
-  it "answers with the origin after a rollback, not the target migrate.yml still names" do
+  # Callers pair this with their own default -- `Oubliette.path(k) || "spec"` --
+  # so nil is the right answer for "nothing moved", and the target migrate.yml
+  # still names is the wrong one. Answering with it would send a suite to a
+  # directory the rollback has just emptied.
+  it "answers with nothing after a rollback, whatever migrate.yml still names" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
     box.run
     box.runner.rollback
     Oubliette.root = box.root
 
-    expect(Oubliette.path("rspec-rails").to_s).to end_with("/spec")
+    expect(Oubliette.path("rspec-rails")).to be_nil
     expect(box.read(Oubliette::Manifest::PATH)).to include("oubliette: test/rspec")
+  ensure
+    Oubliette.root = nil
+  end
+
+  it "answers with nothing after an uninstall, which leaves migrate.yml behind" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec/models])
+    box.run
+    Oubliette::Uninstall.new(box.root, out: box.output, input: StringIO.new).call
+    Oubliette.root = box.root
+
+    expect(box).to be_exist(Oubliette::Manifest::PATH)
+    expect(Oubliette.path("rspec-rails")).to be_nil
+  ensure
+    Oubliette.root = nil
+  end
+
+  it "still answers for a framework left displaced by a partial rollback" do
+    box = sandbox(gems: %w[rspec-rails cucumber-rails], dirs: %w[spec/models features/support])
+    box.run
+    box.runner.rollback("cucumber-rails")
+    Oubliette.root = box.root
+
+    expect(Oubliette.path("cucumber-rails").to_s).to end_with("/features")
+    expect(Oubliette.path("rspec-rails").to_s).to end_with("test/rspec")
   ensure
     Oubliette.root = nil
   end

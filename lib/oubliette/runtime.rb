@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "ledger"
 require_relative "manifest"
 require_relative "notice"
 
@@ -26,12 +27,19 @@ module Oubliette
     class << self
       def apply!(root: Oubliette.root, strict: true)
         return :absent unless Manifest.exists_in?(root)
+        return :dormant unless displaced?(root)
 
         manifest = Manifest.load(root)
         verify!(manifest) if strict
         configure(manifest)
         :applied
       end
+
+      # The hook only speaks up while something is actually displaced. After
+      # `prepare`, after a rollback, and after an uninstall, it says nothing and
+      # every framework keeps its own default -- which is correct, because at
+      # that point every directory is at the default.
+      def displaced?(root) = Ledger.displaced?(root)
 
       # A framework whose directories vanished from both the old and the new
       # location cannot run, and failing loudly here beats a suite that silently

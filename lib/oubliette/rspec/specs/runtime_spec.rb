@@ -6,6 +6,28 @@ RSpec.describe Oubliette::Runtime do
       .to eq(:absent)
   end
 
+  it "says nothing after a rollback, when everything is back at its origin" do
+    box = sandbox(gems: %w[rspec-rails fixtures], dirs: %w[spec test/fixtures])
+    box.run
+    box.runner.rollback
+
+    expect(described_class.apply!(root: box.root)).to eq(:dormant)
+  end
+
+  it "says nothing after prepare, when migrate.yml exists but nothing has moved" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
+    box.runner.prepare
+
+    expect(described_class.apply!(root: box.root)).to eq(:dormant)
+  end
+
+  it "speaks up while something is displaced" do
+    box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
+    box.run
+
+    expect(described_class.apply!(root: box.root)).to eq(:applied)
+  end
+
   it "accepts a project whose directories are all where the manifest says" do
     box = sandbox(gems: %w[rspec-rails factory_bot_rails], dirs: %w[spec/models spec/factories])
     box.run

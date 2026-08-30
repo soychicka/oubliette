@@ -8,6 +8,7 @@ set -uo pipefail
 unset BUNDLE_GEMFILE BUNDLE_PATH BUNDLE_BIN_PATH RUBYOPT || true
 export RBENV_VERSION=3.4.1
 SCRATCH="${1:-$(mktemp -d)}"
+mkdir -p "$SCRATCH"
 GEM="$HOME/developer/gems/oubliette"
 APP="$SCRATCH/pass"
 RESULTS="$SCRATCH/full-pass-results.txt"
@@ -123,3 +124,7 @@ step "24. every suite, with oubliette uninstalled" bin/verify
 echo; echo "################ SUMMARY"; cat "$RESULTS"
 grep -c "^PASS" "$RESULTS" | sed 's/^/passed: /'
 grep -c "^FAIL" "$RESULTS" | sed 's/^/failed: /'
+
+# A harness that reports failures and then exits 0 is a harness nothing can be
+# built on top of.
+! grep -q "^FAIL" "$RESULTS"

@@ -21,6 +21,20 @@ module Oubliette
 
     def self.path_in(root) = Pathname.new(root).join(PATH)
 
+    # Whether anything is actually somewhere other than its origin.
+    #
+    # This is the question every runtime caller is really asking. migrate.yml
+    # says where directories are *meant* to go; only rollback.yml says where
+    # they are. With no rollback.yml -- after `prepare`, or after an uninstall
+    # that leaves migrate.yml behind because it is yours -- nothing has moved,
+    # and answering from migrate.yml would point a suite at directories that do
+    # not exist.
+    def self.displaced?(root)
+      return false unless exists_in?(root)
+
+      load(root).pairs.any? { |pair| pair.origin != pair.current }
+    end
+
     def self.exists_in?(root)
       adopt_legacy(root)
       path_in(root).file?
