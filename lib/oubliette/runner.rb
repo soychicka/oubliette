@@ -156,7 +156,11 @@ module Oubliette
         # Nothing moved, so there is nothing to undo and nothing to explain away:
         # the collision pre-flight and the dirty-tree refusal already say exactly
         # what is wrong, and wrapping them would throw that away.
-        raise error if @dry_run || done.empty?
+        # Oubliette's own errors explain themselves -- the collision pre-flight
+        # and the dirty-tree refusal name the files that matter -- so they pass
+        # through untouched. Anything else is a surprise and gets wrapped, even
+        # with nothing moved, rather than reaching rake as a bare backtrace.
+        raise error if @dry_run || error.is_a?(Error)
 
         restore_configs(manifest, nil)
         mover.protect(done.flat_map { |pair| [ pair.origin, pair.current ] })
@@ -174,13 +178,18 @@ module Oubliette
         end
       end
 
+      # Not put_back: that name is already the public alias for rollback.
+      def restored_note(count)
+        return "" if count.zero?
+
+        subject = count == 1 ? "The one directory that had moved was" : "The #{count} directories that had moved were"
+        " #{subject} put back, and no configuration was rewritten."
+      end
+
       def undone_message(error, done, failed)
         headline = error.message.lines.first.to_s.chomp
-        count = done.length
-        subject = count == 1 ? "The one directory that had moved was" : "The #{count} directories that had moved were"
-
         if failed.empty?
-          [ headline, "Nothing was changed. #{subject} put back, and no configuration was rewritten." ]
+          [ headline, "Nothing was changed.#{restored_note(done.length)}" ]
         else
           [ headline, <<~TEXT ]
             Putting things back afterwards also failed, so the project is part way
