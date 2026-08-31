@@ -56,6 +56,11 @@ namespace :oubliette do
     Oubliette::Uninstall.new(Oubliette.root, force: ENV["FORCE"] == "1").call
   end
 
+  desc "Alias for uninstall -- the one who shows you the way out"
+  task :hoggle do
+    Rake::Task["oubliette:uninstall"].invoke
+  end
+
   desc "Alias for rollback -- put the directories back where their frameworks expect them"
   task :put_back, [ :gem ] do |_task, args|
     oubliette_runner.put_back(args[:gem])

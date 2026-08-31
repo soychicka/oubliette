@@ -32,6 +32,7 @@ rake oubliette:install_specs   # add the layout spec to this project's suite
 rake oubliette:test      # run every suite, report drift, record how long it took
 rake oubliette:playground      # build a demo application to try this on
 rake oubliette:uninstall # roll back, then remove oubliette's own files
+rake oubliette:hoggle    # the same thing, shown out by someone who knows the way
 ```
 
 `rake oubliette --dry-run` works too; the task takes rake's own flag over.
@@ -188,6 +189,9 @@ config restored. Everything else is listed for you to remove or keep, because
 each one has something of yours in it -- migrate.yml is your configuration, the
 test log is your history, an edited guide is your notes, the layout spec is a
 test in your suite, and `test/` itself may well predate oubliette.
+
+`rake oubliette:hoggle` is the same task under another name, for anyone who
+first met the word in a labyrinth.
 
 Then remove `gem "oubliette"` from your Gemfile. Nothing left behind depends on
 it.

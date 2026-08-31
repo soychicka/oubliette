@@ -77,6 +77,13 @@ RSpec.describe Oubliette::Uninstall do
     expect(box.log).to include("test/results/coverage").and include("now stale")
   end
 
+  it "is reachable as hoggle, which is the same task" do
+    tasks = File.read(File.expand_path("../../tasks.rake", __dir__))
+
+    expect(tasks).to include("task :hoggle")
+    expect(tasks).to include(%(Rake::Task["oubliette:uninstall"].invoke))
+  end
+
   it "names what it removed on its own" do
     box = sandbox(gems: %w[rspec-rails], dirs: %w[spec])
     box.run
