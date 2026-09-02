@@ -3,6 +3,7 @@
 require "fileutils"
 require_relative "ledger"
 require_relative "paper"
+require_relative "text"
 require_relative "manifest"
 require_relative "notice"
 require_relative "runner"
@@ -42,9 +43,8 @@ module Oubliette
         return true unless interactive?
 
         @out.puts
-        @out.puts("this puts every test directory back where it started, undoes the")
-        @out.puts("configuration changes, and removes oubliette's own files.")
-        @out.print("\nuninstall oubliette? [Y/n] ")
+        @out.puts(Text.t("uninstall.confirm"))
+        @out.print("\n#{Text.t('uninstall.prompt')}")
         @out.flush if @out.respond_to?(:flush)
         reply = @input.gets.to_s.strip.downcase
 
@@ -68,9 +68,9 @@ module Oubliette
 
       def kept
         [
-          [ Manifest::PATH, "your configuration, edited by hand" ],
-          [ Runs::PATH, "test history" ],
-          [ "#{HOME}/history", "rotated test history" ]
+          [ Manifest::PATH, Text.t("uninstall.reasons.manifest") ],
+          [ Runs::PATH, Text.t("uninstall.reasons.runs") ],
+          [ "#{HOME}/history", Text.t("uninstall.reasons.history") ]
         ].select { |path, _| @root.join(path).exist? } +
           modified_guides + backups + layout_spec + stale_output
       end
@@ -83,7 +83,7 @@ module Oubliette
         Manifest.load(@root).pairs.select(&:generated)
                 .map { |pair| @root.join(pair.oubliette) }
                 .select(&:directory?)
-                .map { |path| [ path.relative_path_from(@root).to_s, "output from your last run, now stale" ] }
+                .map { |path| [ path.relative_path_from(@root).to_s, Text.t("uninstall.reasons.stale_output") ] }
       rescue Error
         []
       end
@@ -95,18 +95,18 @@ module Oubliette
         @root.glob("#{HOME}/*.md")
              .map { |path| path.relative_path_from(@root).to_s }
              .reject { |path| Paper.filenames.include?(path) }
-             .map { |path| [ path, "a guide you have edited" ] }
+             .map { |path| [ path, Text.t("uninstall.reasons.guide") ] }
       end
 
       def backups
         @root.glob("**/*#{Repair::SUFFIX}")
              .reject { |path| path.to_s.include?("/.git/") }
-             .map { |path| [ path.relative_path_from(@root).to_s, "backup taken before a line was rewritten" ] }
+             .map { |path| [ path.relative_path_from(@root).to_s, Text.t("uninstall.reasons.backup") ] }
       end
 
       def layout_spec
         @root.glob("**/oubliette_spec.rb")
-             .map { |path| [ path.relative_path_from(@root).to_s, "the layout spec, which needs the gem" ] }
+             .map { |path| [ path.relative_path_from(@root).to_s, Text.t("uninstall.reasons.layout_spec") ] }
       end
 
       def prune_empty
@@ -117,13 +117,13 @@ module Oubliette
 
       def report(removed, listed)
         @out.puts
-        @out.puts("oubliette has put everything back.")
+        @out.puts(Text.t("uninstall.done"))
 
         unless listed.empty?
           @out.puts
           @out.puts(Notice.rule)
           @out.puts
-          @out.puts("these are yours to remove or keep:")
+          @out.puts(Text.t("uninstall.kept_heading"))
           @out.puts
           width = listed.map { |path, _| path.length }.max
           listed.each { |path, why| @out.puts(format("  %-#{width}s   %s", path, why)) }
@@ -132,9 +132,10 @@ module Oubliette
         end
 
         @out.puts
-        @out.puts("removed automatically: #{removed.empty? ? 'nothing' : removed.join(', ')}")
+        items = removed.empty? ? Text.t("uninstall.removed_nothing") : removed.join(", ")
+        @out.puts(Text.t("uninstall.removed", items: items))
         @out.puts
-        @out.puts("remove `gem \"oubliette\"` from your Gemfile when you are ready.")
+        @out.puts(Text.t("uninstall.gemfile"))
       end
   end
 end

@@ -1,0 +1,29 @@
+# Every string oubliette says. Placeholders are %{name}.
+#
+# This file is the text; the code decides only when to say it. Reword anything
+# here without touching ruby. Keys are grouped by the class that reads them.
+#
+# A key that no longer exists will raise rather than print a blank, and the
+# suite checks in both directions: every key used by the code is defined here,
+# and every key defined here is used by the code.
+---
+uninstall:
+  # No paths in the question: on a project of any size that list is a wall of
+  # text standing in front of a yes/no. The report comes afterwards.
+  confirm: |
+    this puts every test directory back where it started, undoes the
+    configuration changes, and removes oubliette's own files.
+  prompt: "uninstall oubliette? [Y/n] "
+  done: "oubliette has put everything back."
+  kept_heading: "these are yours to remove or keep:"
+  removed: "removed automatically: %{items}"
+  removed_nothing: "nothing"
+  gemfile: 'remove `gem "oubliette"` from your Gemfile when you are ready.'
+  reasons:
+    manifest: "your configuration, edited by hand"
+    runs: "test history"
+    history: "rotated test history"
+    guide: "a guide you have edited"
+    backup: "backup taken before a line was rewritten"
+    layout_spec: "the layout spec, which needs the gem"
+    stale_output: "output from your last run, now stale"
