@@ -27,3 +27,43 @@ uninstall:
     backup: "backup taken before a line was rewritten"
     layout_spec: "the layout spec, which needs the gem"
     stale_output: "output from your last run, now stale"
+
+mover:
+  relocated: "  %{from} -> %{to}"
+  repaired: "    fixed require_relative in %{file}"
+
+writer:
+  skipped: "  %{file}: skipped, nothing to point at"
+  written: "  %{file}: written"
+  updated: "  %{file}: updated in place"
+  removed: "  %{file}: removed, it was written by oubliette"
+  restored: "  %{file}: original restored, your other edits kept"
+
+guide:
+  removed: "  %{file}: removed, the config it describes was never touched"
+  kept: "  %{file}: kept, you have edited it"
+
+reporter:
+  heading:
+    plan: "oubliette"
+    dry_run: "oubliette dry run -- nothing will be written"
+  gem:
+    enabled: "%{gem} (enabled)"
+    disabled: "%{gem} (disabled)"
+  # Looked up by a status decided at runtime, so this is a group rather than
+  # five separate keys.
+  status:
+    pending: "move"
+    settled: "in place"
+    missing: "MISSING"
+    canonical: "already there"
+    configured: "written here"
+  strays:
+    heading: "unclaimed test-shaped directories (disabled -- edit migrate.yml to include)"
+    item: "  %{name}"
+  manual:
+    heading: "CONFIG YOU MUST UPDATE BY HAND -- oubliette does not rewrite these"
+    entry: "  %{file} (%{gem}): %{moves}"
+  warning:
+    heading: "WARNING: missing from both locations -- config will be disabled"
+    entry: "  %{gem}: %{origin} (expected at %{oubliette})"

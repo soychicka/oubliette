@@ -3,6 +3,7 @@
 require "fileutils"
 require "pathname"
 require_relative "managed_block"
+require_relative "../text"
 
 module Oubliette
   module Config
@@ -43,12 +44,19 @@ module Oubliette
         current = read
         updated = render(current)
         if updated.nil?
-          @log.call("  #{filename}: skipped, nothing to point at")
+          @log.call(Text.t("writer.skipped", file: filename))
           return :skipped
         end
         return :unchanged if updated == current
 
-        @log.call("  #{filename}: #{current.nil? ? 'written' : 'updated in place'}")
+        # Both keys spelled out rather than computed: the suite greps for
+        # `Text.t("...")` to prove the locale file and the code agree, and a key
+        # assembled at runtime is a key nobody can find.
+        if current.nil?
+          @log.call(Text.t("writer.written", file: filename))
+        else
+          @log.call(Text.t("writer.updated", file: filename))
+        end
         write(updated)
         :written
       end
@@ -63,10 +71,10 @@ module Oubliette
         return :unchanged if updated == current
 
         if updated.strip.empty?
-          @log.call("  #{filename}: removed, it was written by oubliette")
+          @log.call(Text.t("writer.removed", file: filename))
           remove
         else
-          @log.call("  #{filename}: original restored, your other edits kept")
+          @log.call(Text.t("writer.restored", file: filename))
           write(updated)
         end
         :restored

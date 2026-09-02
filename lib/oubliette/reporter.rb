@@ -1,17 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "notice"
+require_relative "text"
 
 module Oubliette
   # Renders what oubliette is about to do, or has just done, as a plain table.
   class Reporter
-    STATUS_LABEL = {
-      pending: "move",
-      settled: "in place",
-      missing: "MISSING",
-      canonical: "already there",
-      configured: "written here"
-    }.freeze
+    def self.status_labels = @status_labels ||= Text.group("reporter.status")
 
     def initialize(manifest, out: $stdout)
       @manifest = manifest
@@ -19,7 +14,7 @@ module Oubliette
     end
 
     def plan(dry_run: false)
-      heading(dry_run ? "oubliette dry run -- nothing will be written" : "oubliette")
+      heading(dry_run ? Text.t("reporter.heading.dry_run") : Text.t("reporter.heading.plan"))
       @manifest.gems.each { |key| gem_section(key) }
       strays
       manual_configs
@@ -38,9 +33,13 @@ module Oubliette
         return if pairs.empty?
 
         @out.puts
-        @out.puts("#{key} (#{@manifest.enabled?(key) ? 'enabled' : 'disabled'})")
+        if @manifest.enabled?(key)
+          @out.puts(Text.t("reporter.gem.enabled", gem: key))
+        else
+          @out.puts(Text.t("reporter.gem.disabled", gem: key))
+        end
         pairs.each do |pair|
-          label = STATUS_LABEL.fetch(pair.status, pair.status.to_s)
+          label = self.class.status_labels.fetch(pair.status, pair.status.to_s)
           @out.puts(format("  %-14s %s -> %s", label, pair.origin, pair.oubliette))
         end
       end
@@ -50,8 +49,8 @@ module Oubliette
         return if pending.empty?
 
         @out.puts
-        @out.puts("unclaimed test-shaped directories (disabled -- edit migrate.yml to include)")
-        pending.each_key { |name| @out.puts("  #{name}") }
+        @out.puts(Text.t("reporter.strays.heading"))
+        pending.each_key { |name| @out.puts(Text.t("reporter.strays.item", name: name)) }
       end
 
       # These keep their paths in a javascript module rather than in JSON, so
@@ -62,12 +61,12 @@ module Oubliette
         return if manual.empty?
 
         @out.puts
-        @out.puts("CONFIG YOU MUST UPDATE BY HAND -- oubliette does not rewrite these")
+        @out.puts(Text.t("reporter.manual.heading"))
         @out.puts
         @out.puts(Notice.rule)
         manual.each do |entry|
           moves = entry.pairs.map { |pair| "#{pair.origin} -> #{pair.oubliette}" }.join(", ")
-          @out.puts("  #{entry.file} (#{entry.gem}): #{moves}")
+          @out.puts(Text.t("reporter.manual.entry", file: entry.file, gem: entry.gem, moves: moves))
         end
         @out.puts
         @out.puts(Notice.rule)
@@ -78,8 +77,11 @@ module Oubliette
         return if missing.empty?
 
         @out.puts
-        @out.puts("WARNING: missing from both locations -- config will be disabled")
-        missing.each { |pair| @out.puts("  #{pair.gem}: #{pair.origin} (expected at #{pair.oubliette})") }
+        @out.puts(Text.t("reporter.warning.heading"))
+        missing.each do |pair|
+          @out.puts(Text.t("reporter.warning.entry",
+                           gem: pair.gem, origin: pair.origin, oubliette: pair.oubliette))
+        end
       end
   end
 end

@@ -42,9 +42,17 @@ module Oubliette
         format(template, values)
       end
 
-      # Every key under a prefix, in file order. For the handful of places that
-      # print a list whose length is a property of the text, not of the code.
-      def list(key) = Array(lookup(key))
+      # A whole branch, symbol-keyed, for the few places that look a label up by
+      # something decided at runtime -- a status, a tier. Building the key
+      # instead (`"status.#{value}"`) would work and would be worse: the suite
+      # greps for literal keys to prove the file and the code agree, and a key
+      # assembled at runtime is a key nobody can find.
+      def group(key)
+        found = branch(key)
+        raise Missing, "no group at #{key.inspect}" unless found.is_a?(Hash)
+
+        found.transform_keys(&:to_sym)
+      end
 
       def reload! = @tables = nil
 
@@ -56,11 +64,18 @@ module Oubliette
       end
       private
         def lookup(key)
-          path = key.to_s.split(".")
-          found = dig(table(locale), path)
-          found = dig(table(DEFAULT), path) if found.nil? && locale != DEFAULT
+          found = fetch(key) { |node| node.is_a?(Hash) ? nil : node }
           raise Missing, "no text for #{key.inspect} in #{locale}" if found.nil?
 
+          found
+        end
+
+        def branch(key) = fetch(key) { |node| node }
+
+        def fetch(key)
+          path = key.to_s.split(".")
+          found = yield(dig(table(locale), path))
+          found = yield(dig(table(DEFAULT), path)) if found.nil? && locale != DEFAULT
           found
         end
 
@@ -70,7 +85,7 @@ module Oubliette
 
             node = node[segment]
           end
-          node.is_a?(Hash) ? nil : node
+          node
         end
 
         def table(name)

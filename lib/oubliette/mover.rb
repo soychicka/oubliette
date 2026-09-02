@@ -7,6 +7,7 @@ require_relative "manifest"
 require_relative "ledger"
 require_relative "config/writer"
 require_relative "requires"
+require_relative "text"
 
 module Oubliette
   # Performs the relocations described by the manifest. Directories are merged
@@ -86,7 +87,7 @@ module Oubliette
     def relocate(from, to)
       source = @root.join(from)
       target = @root.join(to)
-      @log.call("  #{from} -> #{to}")
+      @log.call(Text.t("mover.relocated", from: from, to: to))
       return if @dry_run
 
       # Collected before the move: a merge into a shared destination must not
@@ -106,7 +107,7 @@ module Oubliette
 
       prune_empty_ancestors(from)
       repaired = Requires.new(@root).repair(from: from, to: to, files: ruby_files)
-      repaired.each { |file| @log.call("    fixed require_relative in #{file}") }
+      repaired.each { |file| @log.call(Text.t("mover.repaired", file: file)) }
       stage(from, to)
     end
 

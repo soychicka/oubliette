@@ -36,7 +36,7 @@ RSpec.describe "#{Oubliette::Text} and the code that calls it" do
   def used_keys
     sources.flat_map do |path|
       code = path.read.lines.reject { |line| line.strip.start_with?("#") }.join
-      code.scan(/Text\.t\(\s*["']([\w.]+)["']/).flatten
+      code.scan(/Text\.(?:t|group)\(\s*["']([\w.]+)["']/).flatten
     end.uniq
   end
 
@@ -48,10 +48,22 @@ RSpec.describe "#{Oubliette::Text} and the code that calls it" do
   end
 
   it "defines every key the code asks for" do
-    expect(used_keys - defined_keys).to be_empty
+    # `defined_keys` lists leaves, so a group key is satisfied by the leaves
+    # beneath it rather than by itself.
+    undefined = used_keys.reject do |used|
+      defined_keys.any? { |key| key == used || key.start_with?("#{used}.") }
+    end
+
+    expect(undefined).to be_empty
   end
 
   it "uses every key it defines" do
-    expect(defined_keys - used_keys).to be_empty
+    # A group key covers everything beneath it: `Text.group("reporter.status")`
+    # is what uses `reporter.status.pending`.
+    unused = defined_keys.reject do |key|
+      used_keys.any? { |used| used == key || key.start_with?("#{used}.") }
+    end
+
+    expect(unused).to be_empty
   end
 end

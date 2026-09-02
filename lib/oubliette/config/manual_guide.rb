@@ -38,11 +38,11 @@ module Oubliette
         return :unchanged unless target.file?
 
         if target.read == render(nil)
-          @log.call("  #{filename}: removed, the config it describes was never touched")
+          @log.call(Text.t("guide.removed", file: filename))
           remove
           :restored
         else
-          @log.call("  #{filename}: kept, you have edited it")
+          @log.call(Text.t("guide.kept", file: filename))
           :unchanged
         end
       end
