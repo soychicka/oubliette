@@ -7,6 +7,7 @@ require_relative "reporter"
 require_relative "scanner"
 require_relative "test_run"
 require_relative "notice"
+require_relative "text"
 require_relative "repair"
 require_relative "config/rspec"
 require_relative "config/cucumber"
@@ -80,7 +81,7 @@ module Oubliette
       manifest = Manifest.build(@root)
       manifest.reset_targets!(only: key)
       manifest.save! unless @dry_run
-      @out.puts("reset #{key || 'every framework'} to oubliette's default targets")
+      @out.puts(Text.t("runner.reset", scope: key || Text.t("runner.reset_all")))
       call
     end
 
@@ -93,7 +94,7 @@ module Oubliette
       ensure_movable!(ledger.pairs(only: key).flat_map { |pair| [ pair.origin, pair.current ] })
       mover = Mover.new(@root, dry_run: @dry_run, logger: @log)
 
-      @out.puts(@dry_run ? "would roll back" : "rolling back")
+      @out.puts(@dry_run ? Text.t("runner.would_roll_back") : Text.t("runner.rolling_back"))
       mover.protect(ledger.pairs(only: key).map(&:origin))
       restore_configs(manifest, key)
 
@@ -107,7 +108,8 @@ module Oubliette
           # Already home, carried back inside a parent that was restored first.
           ledger.record!(pair.gem, pair.origin, pair.origin) unless @dry_run
         else
-          @out.puts("  #{pair.gem}: #{pair.current} is gone, cannot restore #{pair.origin}")
+          @out.puts(Text.t("runner.cannot_restore",
+                            gem: pair.gem, current: pair.current, origin: pair.origin))
         end
       end
 
@@ -131,11 +133,11 @@ module Oubliette
         mover.protect(manifest.pairs.flat_map { |pair| [ pair.origin, pair.current ] })
 
         @out.puts
-        @out.puts(@dry_run ? "would move" : "moving")
-        @out.puts("  nothing -- migrate.yml and rollback.yml already agree") if work.empty?
+        @out.puts(@dry_run ? Text.t("runner.would_move") : Text.t("runner.moving"))
+        @out.puts(Text.t("runner.nothing_to_do")) if work.empty?
 
         movable = work.reject do |pair|
-          pair.missing? && @out.puts("  #{pair.gem}: #{pair.origin} is missing from both locations, skipped")
+          pair.missing? && @out.puts(Text.t("runner.skipped_missing", gem: pair.gem, origin: pair.origin))
         end
         refuse_on_conflicts!(mover, movable)
 
@@ -198,21 +200,17 @@ module Oubliette
       def restored_note(count)
         return "" if count.zero?
 
-        subject = count == 1 ? "The one directory that had moved was" : "The #{count} directories that had moved were"
-        " #{subject} put back, and no configuration was rewritten."
+        return Text.t("runner.restored_one") if count == 1
+
+        Text.t("runner.restored_many", count: count)
       end
 
       def undone_message(error, done, failed)
         headline = error.message.lines.first.to_s.chomp
         if failed.empty?
-          [ headline, "Nothing was changed.#{restored_note(done.length)}" ]
+          [ headline, Text.t("runner.nothing_changed", note: restored_note(done.length)) ]
         else
-          [ headline, <<~TEXT ]
-            Putting things back afterwards also failed, so the project is part way
-            between the two layouts. These could not be returned:
-
-            #{failed.join("\n")}
-          TEXT
+          [ headline, Text.t("runner.undo_failed", failed: failed.join("\n")) ]
         end
       end
 
@@ -226,12 +224,8 @@ module Oubliette
         return if clashes.empty?
 
         raise Error, Notice.error(
-          "these files already exist at the destination and would be overwritten.",
-          <<~TEXT
-            Nothing has been moved. Delete or rename them and run again.
-
-            #{clashes.map { |path| "  #{path}" }.join("\n")}
-          TEXT
+          Text.t("runner.conflicts.headline"),
+          Text.t("runner.conflicts.body", clashes: clashes.map { |path| "  #{path}" }.join("\n"))
         )
       end
 
@@ -261,14 +255,8 @@ module Oubliette
         return if dirty.empty?
 
         raise Error, Notice.error(
-          "there is uncommitted work inside the directories being moved.",
-          <<~TEXT
-            oubliette moves directories with `git mv`, so commit or stash these first --
-            or rerun with FORCE=1 if you know what you are doing. Uncommitted work
-            anywhere else is fine; only these directories are being moved.
-
-            #{dirty.map { |path| "  #{path}" }.join("\n")}
-          TEXT
+          Text.t("runner.dirty.headline"),
+          Text.t("runner.dirty.body", dirty: dirty.map { |path| "  #{path}" }.join("\n"))
         )
       end
 
@@ -280,7 +268,7 @@ module Oubliette
         return if names.empty? && guides.empty?
 
         @out.puts
-        @out.puts(@dry_run ? "would rewrite config" : "rewriting config")
+        @out.puts(@dry_run ? Text.t("runner.would_rewrite") : Text.t("runner.rewriting"))
         names.each do |name|
           Config::Writer.build(name, @root, manifest, dry_run: @dry_run, logger: @log)&.apply
         end
@@ -333,7 +321,7 @@ module Oubliette
         case repair.offer
         when :nothing
           @out.puts
-          @out.puts("stale references to the old locations -- these are yours to update")
+          @out.puts(Text.t("runner.stale.heading"))
           @out.puts
           @out.puts(Notice.rule)
           render_findings(findings)
@@ -342,7 +330,11 @@ module Oubliette
         when :easy
           repaired = repair.apply
           @out.puts
-          @out.puts("updated #{repaired.length} file#{'s' unless repaired.length == 1}, originals kept as comments.")
+          if repaired.length == 1
+            @out.puts(Text.t("runner.stale.repaired_one"))
+          else
+            @out.puts(Text.t("runner.stale.repaired_many", count: repaired.length))
+          end
           @out.puts
           TestRun.new(@root, out: @out).call
         end
@@ -361,14 +353,14 @@ module Oubliette
 
         ordered.each do |file, group|
           @out.puts
-          @out.puts("  #{file}")
+          @out.puts(Text.t("runner.stale.file", file: file))
           group.each { |finding| @out.puts(format("  %5d   %s", finding.line, clip(finding.text))) }
         end
 
         return if findings.length <= FINDINGS_SHOWN
 
         @out.puts
-        @out.puts("  ...and #{findings.length - FINDINGS_SHOWN} more")
+        @out.puts(Text.t("runner.stale.more", count: findings.length - FINDINGS_SHOWN))
       end
 
       def comment?(finding)
@@ -381,17 +373,7 @@ module Oubliette
 
       def prepared(manifest)
         @out.puts
-        @out.puts <<~TEXT
-          Wrote #{manifest.path}. Nothing has moved.
-
-            to exclude a framework, delete its entire entry from #{Manifest::FILENAME},
-              or set `enabled: false` on it to keep the entry in view
-            to change a target path, edit that entry's 'oubliette' attribute
-
-          when you're ready, run
-
-              rake oubliette
-        TEXT
+        @out.puts(Text.t("runner.prepared", path: manifest.path, filename: Manifest::FILENAME))
       end
 
       # The first run shows the developer what it proposes and waits to be told
@@ -401,7 +383,7 @@ module Oubliette
         show_manifest(manifest)
         return proceed("not a terminal, so proceeding without asking") unless interactive?
 
-        @out.print("\ndo you want your test directories in this hierarchy? [Y/n] ")
+        @out.print("\n#{Text.t('runner.confirm')}")
         @out.flush if @out.respond_to?(:flush)
 
         if accepted?(@input.gets)
@@ -432,62 +414,42 @@ module Oubliette
 
       def show_manifest(manifest)
         @out.puts
-        @out.puts("this is what oubliette proposes, written to #{manifest.path}:")
+        @out.puts(Text.t("runner.proposal", path: manifest.path))
         @out.puts
         @out.puts(Notice.rule)
         @out.puts
-        manifest.render.each_line { |line| @out.puts("  #{line.chomp}") }
+        manifest.render.each_line { |line| @out.puts(Text.t("runner.proposal_line", line: line.chomp)) }
         @out.puts
         @out.puts(Notice.rule)
       end
 
       def declined(manifest)
-        @out.puts <<~TEXT
-
-          ok, we'll break here for now. Nothing has been moved.
-
-            to change these paths, you can manually modify the configuration by editing
-            => #{manifest.path}
-
-            to exclude a framework from consolidation, delete the entire entry for the gem
-            from #{Manifest::FILENAME}. It stays deleted; `rake oubliette:reset` brings it
-            back if you change your mind. Setting `enabled: false` on the entry does the
-            same thing without losing sight of it.
-
-            to change a target path, update the path in the 'oubliette' attribute to your
-            preferred target path
-
-          when you're ready to proceed, run
-
-              rake oubliette
-
-          again to implement your changes.
-        TEXT
+        @out.puts(Text.t("runner.declined", path: manifest.path, filename: Manifest::FILENAME))
       end
 
       def finished(manifest)
         @out.puts
-        @out.puts("I have turned the test suite upside down, and I have done it all for you.")
+        @out.puts(Text.t("runner.finished.headline"))
         @out.puts
         @out.puts(Notice.rule)
         @out.puts
-        @out.puts("  #{manifest.path}")
-        @out.puts("      what you asked for. Edit a path and rerun `rake oubliette`.")
-        @out.puts("  #{Ledger.path_in(@root)}")
-        @out.puts("      where everything came from. `rake oubliette:rollback` reads this.")
-        @out.puts("  #{@root.join(Paper::Recovery::FILENAME)}")
-        @out.puts("      how to undo all of it, with or without this gem installed.")
+        @out.puts(Text.t("runner.finished.manifest", path: manifest.path))
+        @out.puts(Text.t("runner.finished.manifest_note"))
+        @out.puts(Text.t("runner.finished.ledger", path: Ledger.path_in(@root)))
+        @out.puts(Text.t("runner.finished.ledger_note"))
+        @out.puts(Text.t("runner.finished.recovery", path: @root.join(Paper::Recovery::FILENAME)))
+        @out.puts(Text.t("runner.finished.recovery_note"))
         # Asked of the guide rather than rebuilt from the entry: this printed a
         # filename it had worked out for itself, and the two rules had drifted.
         manual_guides(manifest).each do |guide|
-          @out.puts("  #{@root.join(guide.filename)}")
-          @out.puts("      #{guide.entry.file} is yours to update; these are the instructions.")
+          @out.puts(Text.t("runner.finished.guide", path: @root.join(guide.filename)))
+          @out.puts(Text.t("runner.finished.guide_note", file: guide.entry.file))
         end
         @out.puts
         @out.puts(Notice.rule)
         @out.puts
-        @out.puts("  rake oubliette:status     where every test directory now lives")
-        @out.puts("  rake oubliette:rollback   put it all back")
+        @out.puts(Text.t("runner.finished.status"))
+        @out.puts(Text.t("runner.finished.rollback"))
       end
   end
 end

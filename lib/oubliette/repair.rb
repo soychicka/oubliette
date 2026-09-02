@@ -3,6 +3,7 @@
 require "fileutils"
 require_relative "config/managed_block"
 require_relative "notice"
+require_relative "text"
 
 module Oubliette
   # Offers to make the stale-reference edits, rather than leaving them as
@@ -44,8 +45,7 @@ module Oubliette
     private
       def show(code, comments)
         @out.puts
-        @out.puts("some files still name the old locations. oubliette does not change")
-        @out.puts("application code on its own.")
+        @out.puts(Text.t("repair.heading"))
         @out.puts
         @out.puts(Notice.rule)
         code.group_by(&:file).each { |file, group| show_file(file, group) }
@@ -58,7 +58,7 @@ module Oubliette
 
       def show_file(file, group)
         @out.puts
-        @out.puts("  #{file}")
+        @out.puts(Text.t("repair.file", file: file))
         group.each do |finding|
           @out.puts(format("  %5d   %s", finding.line, finding.text))
           @out.puts(format("          ->  %s", finding.suggestion))
@@ -69,30 +69,17 @@ module Oubliette
         return if comments.empty?
 
         @out.puts
-        @out.puts("#{comments.length} more mention an old path inside a comment. Those are left alone:")
-        @out.puts("a note about what a generator does is not a statement about your layout.")
+        @out.puts(Text.t("repair.comments", count: comments.length))
       end
 
       def options(code)
-        files = code.map(&:file).uniq
+        backups = code.map(&:file).uniq.map { |file| file + SUFFIX }.join(", ")
 
-        <<~TEXT
-          you can update these lines yourself -- but you'll have to run the test suite
-          yourself for a sanity check once the files are updated.
-
-          --OR--
-
-           I'll do the following for you:
-
-            1. create backups of the current files at #{files.map { |f| f + SUFFIX }.join(', ')}
-            2. update the files for you directly, preserving the original lines as comments
-            3. run the entire test suite to verify everything works (this may be slow,
-               depending on the length of your test suite)
-        TEXT
+        Text.t("repair.options", backups: backups)
       end
 
       def accepted?
-        @out.print("how do you want to roll?  [ 1: manual | 2: easy - <default> ]: ")
+        @out.print(Text.t("repair.prompt"))
         @out.flush if @out.respond_to?(:flush)
         reply = @input.gets.to_s.strip.downcase
 

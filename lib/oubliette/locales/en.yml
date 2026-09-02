@@ -67,3 +67,149 @@ reporter:
   warning:
     heading: "WARNING: missing from both locations -- config will be disabled"
     entry: "  %{gem}: %{origin} (expected at %{oubliette})"
+
+playground:
+  unavailable: "\n%{script} is not in this copy of the gem, so there is nothing to build."
+  intro: |
+    oubliette will build a small rails application with one passing test per
+    framework it knows about, so there is something safe to run it against.
+  where: "where should it go? [%{suggestion}] "
+  # rm -rf on a directory somebody named by hand deserves more than a keystroke,
+  # so this is the one prompt in oubliette that will not take y.
+  exists: "%{target} already exists, and building the playground deletes it first."
+  confirm: "type YES to delete it and build: "
+  occupied:
+    headline: "%{target} already exists."
+    body: |
+      Building the playground would delete it. Remove it yourself, or run
+      the task where you can answer the prompt.
+  building: "building %{target}"
+  ready: |
+    the playground is ready. `cd %{target}`, then uncomment oubliette in the
+    Gemfile and `bundle install` when you want the rake tasks.
+  failed: "%{script} did not finish. Whatever it managed to build is at %{target}."
+
+test_run:
+  suite: "----- %{label} -----"
+  first_run: "no earlier run to compare against. Run this again after migrating to see drift."
+  no_drift: "no drift since the last run."
+  drift_heading: "DRIFT since the last run -- a count that moved without a failure is worth a look:"
+  drift_entry: "  %{line}"
+  nothing: "no test suites found here."
+  green: "everything green"
+  failed: "%{suites} failed"
+
+repair:
+  heading: |
+    some files still name the old locations. oubliette does not change
+    application code on its own.
+  file: "  %{file}"
+  comments: |
+    %{count} more mention an old path inside a comment. Those are left alone:
+    a note about what a generator does is not a statement about your layout.
+  prompt: "how do you want to roll?  [ 1: manual | 2: easy - <default> ]: "
+  options: |
+    you can update these lines yourself -- but you'll have to run the test suite
+    yourself for a sanity check once the files are updated.
+
+    --OR--
+
+     I'll do the following for you:
+
+      1. create backups of the current files at %{backups}
+      2. update the files for you directly, preserving the original lines as comments
+      3. run the entire test suite to verify everything works (this may be slow,
+         depending on the length of your test suite)
+
+runner:
+  reset: "reset %{scope} to oubliette's default targets"
+  reset_all: "every framework"
+  moving: "moving"
+  would_move: "would move"
+  rolling_back: "rolling back"
+  would_roll_back: "would roll back"
+  rewriting: "rewriting config"
+  would_rewrite: "would rewrite config"
+  nothing_to_do: "  nothing -- migrate.yml and rollback.yml already agree"
+  skipped_missing: "  %{gem}: %{origin} is missing from both locations, skipped"
+  cannot_restore: "  %{gem}: %{current} is gone, cannot restore %{origin}"
+
+  # A failed migration undoes its own moves. These say how far it got.
+  restored_one: " The one directory that had moved was put back, and no configuration was rewritten."
+  restored_many: " The %{count} directories that had moved were put back, and no configuration was rewritten."
+  nothing_changed: "Nothing was changed.%{note}"
+  undo_failed: |
+    Putting things back afterwards also failed, so the project is part way
+    between the two layouts. These could not be returned:
+
+    %{failed}
+
+  conflicts:
+    headline: "these files already exist at the destination and would be overwritten."
+    body: |
+      Nothing has been moved. Delete or rename them and run again.
+
+      %{clashes}
+  dirty:
+    headline: "there is uncommitted work inside the directories being moved."
+    body: |
+      oubliette moves directories with `git mv`, so commit or stash these first --
+      or rerun with FORCE=1 if you know what you are doing. Uncommitted work
+      anywhere else is fine; only these directories are being moved.
+
+      %{dirty}
+
+  stale:
+    heading: "stale references to the old locations -- these are yours to update"
+    file: "  %{file}"
+    more: "  ...and %{count} more"
+    repaired_one: "updated 1 file, originals kept as comments."
+    repaired_many: "updated %{count} files, originals kept as comments."
+
+  prepared: |
+    Wrote %{path}. Nothing has moved.
+
+      to exclude a framework, delete its entire entry from %{filename},
+        or set `enabled: false` on it to keep the entry in view
+      to change a target path, edit that entry's 'oubliette' attribute
+
+    when you're ready, run
+
+        rake oubliette
+
+  proposal: "this is what oubliette proposes, written to %{path}:"
+  proposal_line: "  %{line}"
+  confirm: "do you want your test directories in this hierarchy? [Y/n] "
+  declined: |
+
+    ok, we'll break here for now. Nothing has been moved.
+
+      to change these paths, you can manually modify the configuration by editing
+      => %{path}
+
+      to exclude a framework from consolidation, delete the entire entry for the gem
+      from %{filename}. It stays deleted; `rake oubliette:reset` brings it
+      back if you change your mind. Setting `enabled: false` on the entry does the
+      same thing without losing sight of it.
+
+      to change a target path, update the path in the 'oubliette' attribute to your
+      preferred target path
+
+    when you're ready to proceed, run
+
+        rake oubliette
+
+    again to implement your changes.
+
+  finished:
+    headline: "I have turned the test suite upside down, and I have done it all for you."
+    manifest: "  %{path}"
+    manifest_note: "      what you asked for. Edit a path and rerun `rake oubliette`."
+    ledger: "  %{path}"
+    ledger_note: "      where everything came from. `rake oubliette:rollback` reads this."
+    recovery: "  %{path}"
+    recovery_note: "      how to undo all of it, with or without this gem installed."
+    guide: "  %{path}"
+    guide_note: "      %{file} is yours to update; these are the instructions."
+    status: "  rake oubliette:status     where every test directory now lives"
+    rollback: "  rake oubliette:rollback   put it all back"

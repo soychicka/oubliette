@@ -3,6 +3,7 @@
 require "open3"
 require_relative "manifest"
 require_relative "notice"
+require_relative "text"
 require_relative "runs"
 require_relative "suite"
 
@@ -40,7 +41,7 @@ module Oubliette
 
       def run(suite)
         @out.puts
-        @out.puts("----- #{suite.label} -----")
+        @out.puts(Text.t("test_run.suite", label: suite.label))
         @out.puts
 
         started = Time.now
@@ -83,18 +84,20 @@ module Oubliette
       def verdict(results)
         failed = results.reject(&:passed)
 
-        failed.empty? ? "everything green" : "#{failed.map(&:suite).join(', ')} failed"
+        return Text.t("test_run.green") if failed.empty?
+
+        Text.t("test_run.failed", suites: failed.map(&:suite).join(", "))
       end
 
       def report_drift
         if @first_run
-          @out.puts("no earlier run to compare against. Run this again after migrating to see drift.")
+          @out.puts(Text.t("test_run.first_run"))
         elsif @drift.empty?
-          @out.puts("no drift since the last run.")
+          @out.puts(Text.t("test_run.no_drift"))
         else
           @out.puts
-          @out.puts("DRIFT since the last run -- a count that moved without a failure is worth a look:")
-          @drift.each { |line| @out.puts("  #{line}") }
+          @out.puts(Text.t("test_run.drift_heading"))
+          @drift.each { |line| @out.puts(Text.t("test_run.drift_entry", line: line)) }
         end
       end
 
@@ -116,7 +119,7 @@ module Oubliette
       end
 
       def report_nothing
-        @out.puts("no test suites found here.")
+        @out.puts(Text.t("test_run.nothing"))
         true
       end
   end

@@ -2,6 +2,7 @@
 
 require "pathname"
 require_relative "notice"
+require_relative "text"
 
 module Oubliette
   # Builds the demonstration application, so that trying oubliette out never
@@ -41,7 +42,7 @@ module Oubliette
       def available?
         return true if self.class.script.executable?
 
-        @out.puts("\n#{SCRIPT} is not in this copy of the gem, so there is nothing to build.")
+        @out.puts(Text.t("playground.unavailable", script: SCRIPT))
         false
       end
 
@@ -54,9 +55,8 @@ module Oubliette
         return suggestion unless interactive?
 
         @out.puts
-        @out.puts("oubliette will build a small rails application with one passing test per")
-        @out.puts("framework it knows about, so there is something safe to run it against.")
-        @out.print("\nwhere should it go? [#{suggestion}] ")
+        @out.puts(Text.t("playground.intro"))
+        @out.print("\n#{Text.t('playground.where', suggestion: suggestion)}")
         flush
         reply = @input.gets.to_s.strip
 
@@ -67,15 +67,14 @@ module Oubliette
       # keystroke, so this is the one prompt in oubliette that will not take y.
       def overwrite?(target)
         unless interactive?
-          @out.puts(Notice.error("#{target} already exists.",
-                                 "Building the playground would delete it. Remove it yourself, or run\n" \
-                                 "the task where you can answer the prompt."))
+          @out.puts(Notice.error(Text.t("playground.occupied.headline", target: target),
+                                 Text.t("playground.occupied.body")))
           return false
         end
 
         @out.puts
-        @out.puts("#{target} already exists, and building the playground deletes it first.")
-        @out.print("\ntype YES to delete it and build: ")
+        @out.puts(Text.t("playground.exists", target: target))
+        @out.print("\n#{Text.t('playground.confirm')}")
         flush
 
         @input.gets.to_s.strip.casecmp?("YES")
@@ -83,7 +82,7 @@ module Oubliette
 
       def build(target)
         @out.puts
-        @out.puts("building #{target}")
+        @out.puts(Text.t("playground.building", target: target))
         @out.puts
         @out.puts(Notice.rule)
         ok = system(self.class.script.to_s, target.to_s)
@@ -91,11 +90,10 @@ module Oubliette
         @out.puts
 
         if ok
-          @out.puts("the playground is ready. `cd #{target}`, then uncomment oubliette in the")
-          @out.puts("Gemfile and `bundle install` when you want the rake tasks.")
+          @out.puts(Text.t("playground.ready", target: target))
           :built
         else
-          @out.puts("#{SCRIPT} did not finish. Whatever it managed to build is at #{target}.")
+          @out.puts(Text.t("playground.failed", script: SCRIPT, target: target))
           :failed
         end
       end
