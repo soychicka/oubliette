@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "writer"
+require_relative "../text"
 
 module Oubliette
   module Config
@@ -48,50 +49,33 @@ module Oubliette
       end
 
       def render(_current)
-        <<~MARKDOWN
-          # #{@entry.gem}: update `#{@entry.file}` by hand
-
-          Oubliette moved these directories:
-
-          #{moves.join("\n")}
-
-          `#{@entry.file}` is javascript rather than JSON, so oubliette does not
-          rewrite it: there is no safe round trip through executable code, and a
-          bad substitution in a config file is worse than no substitution at all.
-
-          #{settings_sentence}
-
-          #{example}
-
-          Once the config points at the new location, delete this file. It is also
-          removed by `rake oubliette:rollback`, which puts the directories back.
-        MARKDOWN
+        Text.t("manual_guide.document",
+               gem: @entry.gem, file: @entry.file, moves: moves.join("\n"),
+               settings: settings_sentence, example: example)
       end
       private
         def moves
-          @entry.pairs.map { |pair| "    #{pair.origin} -> #{pair.oubliette}" }
+          @entry.pairs.map do |pair|
+            Text.t("manual_guide.move", origin: pair.origin, oubliette: pair.oubliette)
+          end
         end
 
         def settings_sentence
-          return "Point its spec paths at the new location." if @entry.settings.empty?
+          return Text.t("manual_guide.settings_unknown") if @entry.settings.empty?
 
-          names = @entry.settings.map { |setting| "`#{setting}`" }
-          "Update #{names.join(' and ')} so #{@entry.settings.one? ? 'it points' : 'they point'} at the new location."
+          names = @entry.settings.map { |setting| "`#{setting}`" }.join(" and ")
+          return Text.t("manual_guide.settings_one", names: names) if @entry.settings.one?
+
+          Text.t("manual_guide.settings_many", names: names)
         end
 
         def example
           pair = @entry.pairs.first
           setting = @entry.settings.first || "specPattern"
 
-          <<~TEXT.rstrip
-            ```js
-            // before
-            #{nested(setting, "#{pair.origin}/**/*")}
-
-            // after
-            #{nested(setting, "#{pair.oubliette}/**/*")}
-            ```
-          TEXT
+          Text.t("manual_guide.example",
+                 before: nested(setting, "#{pair.origin}/**/*"),
+                 after: nested(setting, "#{pair.oubliette}/**/*")).rstrip
         end
 
         # e2e.specPattern is how the setting is described, not how it is

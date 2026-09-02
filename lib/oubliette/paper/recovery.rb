@@ -2,6 +2,7 @@
 
 require_relative "../config/managed_block"
 require_relative "../paper"
+require_relative "../text"
 require_relative "../version"
 
 module Oubliette
@@ -19,41 +20,13 @@ module Oubliette
       def filename = FILENAME
 
       def render
-        <<~MARKDOWN
-          # Putting everything back
-
-          Oubliette moved the directories in the table below and rewrote the
-          configuration that pointed at them. Every change is reversible, and there
-          are two ways to reverse it.
-
-          **With the gem installed**, `rake oubliette:rollback` returns every
-          directory to its origin and restores the configuration. Add a framework
-          name to do one at a time: `rake "oubliette:rollback[cucumber-rails]"`.
-          `rake oubliette:uninstall` does the same and then removes oubliette's own
-          files.
-
-          **Without it**, move each directory back with the table below, then look
-          for the blocks oubliette left in your config files. Each one opens with
-          `#{Config::ManagedBlock::OPEN}` and closes with
-          `#{Config::ManagedBlock::CLOSE}`, and carries your original lines inside
-          it, commented out and prefixed `#{Config::ManagedBlock::WAS}`. Uncomment
-          those and delete the rest of the block, marker lines included. Anything
-          outside a block was never touched.
-
-          Oubliette rewrites this file on every run to match where things actually
-          are. Anything you change here is ignored and will be overwritten.
-
-          #{Notice::RULE}
-
-          ## Where everything came from
-
-          #{origins}
-
-          #{Notice::RULE}
-
-          Written by oubliette #{VERSION}. The paths above were correct as of the
-          last run; `rake oubliette:status` reports where they are now.
-        MARKDOWN
+        Text.t("paper.recovery",
+               open: Config::ManagedBlock::OPEN,
+               close: Config::ManagedBlock::CLOSE,
+               was: Config::ManagedBlock::WAS,
+               rule: Notice::RULE,
+               origins: origins,
+               version: VERSION)
       end
       private
         def origins

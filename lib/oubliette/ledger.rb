@@ -4,6 +4,7 @@ require "fileutils"
 require "yaml"
 require "pathname"
 require_relative "pair"
+require_relative "text"
 
 module Oubliette
   # rollback.yml: where each directory started, and where it is now.
@@ -135,14 +136,7 @@ module Oubliette
     end
 
     def render
-      <<~YAML + @data.to_yaml.sub(/\A---\n/, "")
-        # rollback.yml -- written by oubliette, not by you.
-        #
-        # `origin` is where each framework keeps this directory by default.
-        # `oubliette` is where it is right now. Editing migrate.yml changes
-        # where things are going; it never changes where they came from, which
-        # is what `rake oubliette:rollback` reads.
-      YAML
+      Text.t("ledger.header") + @data.to_yaml.sub(/\A---\n/, "")
     end
     private
       def paths_for(gem)

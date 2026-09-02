@@ -2,6 +2,7 @@
 
 require_relative "../catalog"
 require_relative "../paper"
+require_relative "../text"
 require_relative "../version"
 
 module Oubliette
@@ -19,66 +20,30 @@ module Oubliette
       def filename = FILENAME
 
       def render
-        <<~MARKDOWN
-          # This directory belongs to oubliette
-
-          Your test suites live under `test/` now. Every framework in the list below
-          was moved here, and its configuration was rewritten to match, so the usual
-          commands -- `rspec`, `rails test`, `cucumber`, `npm test` -- work unchanged.
-
-          Oubliette wrote this file and rewrites it on every run. Notes you add here
-          will be lost; put them somewhere oubliette does not own.
-
-          #{Notice::RULE}
-
-          ## Moved and configured for you
-
-          #{automatic}
-
-          #{Notice::RULE}
-
-          ## Moved, but you have to finish the configuration
-
-          #{manual_section}
-
-          #{Notice::RULE}
-
-          ## Getting out
-
-          `RECOVERY.md`, next to this file, lists where every directory came from and
-          how to put it back -- by hand, with no gem installed, if it comes to that.
-          With the gem installed, `rake oubliette:rollback` does it for you and
-          `rake oubliette:uninstall` does it and then leaves.
-
-          Written by oubliette #{VERSION}.
-        MARKDOWN
+        Text.t("paper.readme",
+               rule: Notice::RULE,
+               automatic: automatic,
+               manual: manual_section,
+               version: VERSION)
       end
       private
         def automatic
           rows = entries.reject { |entry| manual?(entry) }
                         .map { |entry| [ entry[:label], where(entry) ] }
-          return "Nothing yet." if rows.empty?
+          return Text.t("paper.readme_nothing") if rows.empty?
 
-          table(rows, %w[Framework Now\ at])
+          table(rows, [ Text.t("paper.headers.framework"), Text.t("paper.headers.now_at") ])
         end
 
         def manual_section
           rows = entries.select { |entry| manual?(entry) }
                         .map { |entry| [ entry[:label], where(entry), Array(entry[:manual_settings]).join(", ") ] }
-          return "None. Every framework oubliette moved here was configured for you." if rows.empty?
+          return Text.t("paper.readme_all_automatic") if rows.empty?
 
-          <<~SECTION.rstrip
-            Vitest, Playwright, Cypress and Karma keep their paths inside a javascript
-            module -- `vitest.config.js` and friends are executable code, not data. There
-            is no way to read one, change a value and write it back that cannot quietly
-            corrupt it, so oubliette moves the directories and leaves the edit to you.
+          headers = [ Text.t("paper.headers.framework"), Text.t("paper.headers.now_at"),
+                      Text.t("paper.headers.setting") ]
 
-            There is a note for each one in this directory, naming the setting and the
-            exact before and after. Until you make those edits, these suites will not
-            find their tests.
-
-            #{table(rows, [ "Framework", "Now at", "Setting to change" ])}
-          SECTION
+          Text.t("paper.readme_manual", table: table(rows, headers)).rstrip
         end
 
         def entries

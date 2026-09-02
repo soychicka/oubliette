@@ -6,6 +6,7 @@ require "pathname"
 require_relative "detector"
 require_relative "ledger"
 require_relative "pair"
+require_relative "text"
 
 module Oubliette
   # migrate.yml: where you want each framework's directories to live.
@@ -168,17 +169,7 @@ module Oubliette
     end
 
     def header
-      <<~YAML
-        # migrate.yml -- where you want each framework's directories to live.
-        #
-        # Edit `oubliette:` to send a directory somewhere else, flip `enabled:`
-        # to skip a framework, then rerun `rake oubliette`. Only the entries that
-        # differ from rollback.yml are touched, so a rerun is cheap.
-        #
-        #   rake oubliette              move whatever changed here
-        #   rake oubliette:reset        put oubliette's own targets back, and move
-        #   rake oubliette:rollback     return everything to its `origin`
-      YAML
+      Text.t("manifest.header")
     end
     private
       # Rendered a section at a time, because to_yaml will not put a comment
@@ -233,23 +224,7 @@ module Oubliette
           format("#   %-18s %-22s ->  %s", entry[:key], origin, target)
         end
 
-        <<~YAML
-          #{"\n"}# frameworks oubliette knows about but did not find here. Install one and
-          # rerun `rake oubliette` -- it is added above automatically, and there is
-          # nothing here to uncomment.
-          #
-          #{rows.join("\n")}
-          #
-          # To add one by hand -- a framework you do have, in a layout detection
-          # missed -- copy this shape into gems: above.
-          #
-          #   my-framework:
-          #     enabled: true
-          #     config: []
-          #     paths:
-          #     - origin: some/directory
-          #       oubliette: test/somewhere
-        YAML
+        Text.t("manifest.unfound", rows: rows.join("\n"))
       end
 
     private

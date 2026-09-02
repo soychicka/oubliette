@@ -3,6 +3,7 @@
 require_relative "ledger"
 require_relative "manifest"
 require_relative "notice"
+require_relative "text"
 
 module Oubliette
   # Applies the parts of migrate.yml that cannot live in a config file, by
@@ -52,12 +53,8 @@ module Oubliette
         return if broken.empty?
 
         raise MissingPaths, Notice.error(
-          "directories are missing for #{broken.join(', ')}.",
-          <<~TEXT
-            migrate.yml points at paths that exist in neither their original nor
-            their new location, so the test suite cannot run. Restore the files, or
-            run `rake oubliette:rollback` and edit migrate.yml.
-          TEXT
+          Text.t("runtime.missing.headline", gems: broken.join(", ")),
+          Text.t("runtime.missing.body")
         )
       end
 
@@ -132,8 +129,26 @@ module Oubliette
         def reload_factories?
           return false unless FactoryBot.respond_to?(:reload)
           return true unless FactoryBot.respond_to?(:factories)
+          return true if FactoryBot.factories.count.positive?
 
-          FactoryBot.factories.count.positive?
+          # Nothing is registered, which means one of two opposite things, and
+          # counting cannot tell them apart.
+          #
+          # Either factory_bot_rails has not loaded the definitions yet, in
+          # which case it is about to, from the paths just set, and loading
+          # them here as well would register every factory twice. Or it has
+          # already run and found nothing, because it looked in a directory
+          # that had moved -- and then a reload is the only thing that will
+          # save the suite.
+          #
+          # What separates them is whether the application has finished
+          # initializing, since factory_bot_rails loads from `after_initialize`.
+          booted?
+        end
+
+        def booted?
+          defined?(Rails) && Rails.respond_to?(:application) &&
+            Rails.application.respond_to?(:initialized?) && Rails.application.initialized?
         end
 
         def cassettes(path)

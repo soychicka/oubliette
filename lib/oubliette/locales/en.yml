@@ -213,3 +213,169 @@ runner:
     guide_note: "      %{file} is yours to update; these are the instructions."
     status: "  rake oubliette:status     where every test directory now lives"
     rollback: "  rake oubliette:rollback   put it all back"
+
+runtime:
+  missing:
+    headline: "directories are missing for %{gems}."
+    body: |
+      migrate.yml points at paths that exist in neither their original nor
+      their new location, so the test suite cannot run. Restore the files, or
+      run `rake oubliette:rollback` and edit migrate.yml.
+
+# The commented headers oubliette writes into the two yaml files it owns.
+ledger:
+  header: |
+    # rollback.yml -- written by oubliette, not by you.
+    #
+    # `origin` is where each framework keeps this directory by default.
+    # `oubliette` is where it is right now. Editing migrate.yml changes
+    # where things are going; it never changes where they came from, which
+    # is what `rake oubliette:rollback` reads.
+
+manifest:
+  header: |
+    # migrate.yml -- where you want each framework's directories to live.
+    #
+    # Edit `oubliette:` to send a directory somewhere else, flip `enabled:`
+    # to skip a framework, then rerun `rake oubliette`. Only the entries that
+    # differ from rollback.yml are touched, so a rerun is cheap.
+    #
+    #   rake oubliette              move whatever changed here
+    #   rake oubliette:reset        put oubliette's own targets back, and move
+    #   rake oubliette:rollback     return everything to its `origin`
+  unfound: |
+
+    # frameworks oubliette knows about but did not find here. Install one and
+    # rerun `rake oubliette` -- it is added above automatically, and there is
+    # nothing here to uncomment.
+    #
+    %{rows}
+    #
+    # To add one by hand -- a framework you do have, in a layout detection
+    # missed -- copy this shape into gems: above.
+    #
+    #   my-framework:
+    #     enabled: true
+    #     config: []
+    #     paths:
+    #     - origin: some/directory
+    #       oubliette: test/somewhere
+
+# The two documents oubliette writes into test/oubliette. Markdown, kept here so
+# the classes that render them are about assembling the table, not the prose.
+paper:
+  recovery: |
+    # Putting everything back
+
+    Oubliette moved the directories in the table below and rewrote the
+    configuration that pointed at them. Every change is reversible, and there
+    are two ways to reverse it.
+
+    **With the gem installed**, `rake oubliette:rollback` returns every
+    directory to its origin and restores the configuration. Add a framework
+    name to do one at a time: `rake "oubliette:rollback[cucumber-rails]"`.
+    `rake oubliette:uninstall` does the same and then removes oubliette's own
+    files.
+
+    **Without it**, move each directory back with the table below, then look
+    for the blocks oubliette left in your config files. Each one opens with
+    `%{open}` and closes with
+    `%{close}`, and carries your original lines inside
+    it, commented out and prefixed `%{was}`. Uncomment
+    those and delete the rest of the block, marker lines included. Anything
+    outside a block was never touched.
+
+    Oubliette rewrites this file on every run to match where things actually
+    are. Anything you change here is ignored and will be overwritten.
+
+    %{rule}
+
+    ## Where everything came from
+
+    %{origins}
+
+    %{rule}
+
+    Written by oubliette %{version}. The paths above were correct as of the
+    last run; `rake oubliette:status` reports where they are now.
+  readme: |
+    # This directory belongs to oubliette
+
+    Your test suites live under `test/` now. Every framework in the list below
+    was moved here, and its configuration was rewritten to match, so the usual
+    commands -- `rspec`, `rails test`, `cucumber`, `npm test` -- work unchanged.
+
+    Oubliette wrote this file and rewrites it on every run. Notes you add here
+    will be lost; put them somewhere oubliette does not own.
+
+    %{rule}
+
+    ## Moved and configured for you
+
+    %{automatic}
+
+    %{rule}
+
+    ## Moved, but you have to finish the configuration
+
+    %{manual}
+
+    %{rule}
+
+    ## Getting out
+
+    `RECOVERY.md`, next to this file, lists where every directory came from and
+    how to put it back -- by hand, with no gem installed, if it comes to that.
+    With the gem installed, `rake oubliette:rollback` does it for you and
+    `rake oubliette:uninstall` does it and then leaves.
+
+    Written by oubliette %{version}.
+  readme_nothing: "Nothing yet."
+  readme_all_automatic: "None. Every framework oubliette moved here was configured for you."
+  readme_manual: |
+    Vitest, Playwright, Cypress and Karma keep their paths inside a javascript
+    module -- `vitest.config.js` and friends are executable code, not data. There
+    is no way to read one, change a value and write it back that cannot quietly
+    corrupt it, so oubliette moves the directories and leaves the edit to you.
+
+    There is a note for each one in this directory, naming the setting and the
+    exact before and after. Until you make those edits, these suites will not
+    find their tests.
+
+    %{table}
+  headers:
+    framework: "Framework"
+    now_at: "Now at"
+    setting: "Setting to change"
+
+# The note left beside a config file oubliette will not rewrite.
+manual_guide:
+  document: |
+    # %{gem}: update `%{file}` by hand
+
+    Oubliette moved these directories:
+
+    %{moves}
+
+    `%{file}` is javascript rather than JSON, so oubliette does not
+    rewrite it: there is no safe round trip through executable code, and a
+    bad substitution in a config file is worse than no substitution at all.
+
+    %{settings}
+
+    %{example}
+
+    Once the config points at the new location, delete this file. It is also
+    removed by `rake oubliette:rollback`, which puts the directories back.
+  move: "    %{origin} -> %{oubliette}"
+  settings_unknown: "Point its spec paths at the new location."
+  settings_one: "Update %{names} so it points at the new location."
+  settings_many: "Update %{names} so they point at the new location."
+  example: |
+    ```js
+    // before
+    %{before}
+
+    // after
+    %{after}
+    ```
