@@ -26,6 +26,7 @@ Gem::Specification.new do |spec|
   spec.files = Dir[
     "lib/**/*.rb",
     "lib/**/*.rake",
+    "lib/**/*.yml",
     "exe/*",
     "bin/playground",
     "README.md",

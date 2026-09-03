@@ -67,3 +67,19 @@ RSpec.describe "#{Oubliette::Text} and the code that calls it" do
     expect(unused).to be_empty
   end
 end
+
+RSpec.describe "#{Oubliette::Text} in a packaged gem" do
+  # The locale file is data, and the gemspec lists files by extension. Every
+  # string in the gem became unreachable the moment the text moved out of the
+  # .rb files, and nothing in the suite would have noticed: the specs run from
+  # the working tree, where the file is simply there.
+  it "packages the locale files it loads at runtime" do
+    gemspec = Pathname.new(File.expand_path("../../../..", __dir__)).join("oubliette.gemspec")
+    packaged = Gem::Specification.load(gemspec.to_s).files
+
+    locales = Dir.children(Oubliette::Text::DIRECTORY).map { |name| "lib/oubliette/locales/#{name}" }
+
+    expect(locales).not_to be_empty
+    expect(locales - packaged).to be_empty
+  end
+end
