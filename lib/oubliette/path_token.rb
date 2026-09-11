@@ -14,7 +14,7 @@ module Oubliette
     module_function
 
     def pattern(path)
-      %r{(?<![\w/.\-])(\./)?#{Regexp.escape(path)}(?=[\s/'"]|$)}
+      %r{(?<![\w/.\-(])(?<!\\ )(\./)?#{Regexp.escape(path)}(?=[\s/'")\]\},]|$)}
     end
 
     # Matches the path written as a quoted string of its own, "spec" or "./spec".

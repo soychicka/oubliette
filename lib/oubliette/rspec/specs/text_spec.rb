@@ -74,8 +74,12 @@ RSpec.describe "#{Oubliette::Text} in a packaged gem" do
   # .rb files, and nothing in the suite would have noticed: the specs run from
   # the working tree, where the file is simply there.
   it "packages the locale files it loads at runtime" do
-    gemspec = Pathname.new(File.expand_path("../../../..", __dir__)).join("oubliette.gemspec")
-    packaged = Gem::Specification.load(gemspec.to_s).files
+    root = Pathname.new(File.expand_path("../../../..", __dir__))
+    gemspec = root.join("oubliette.gemspec")
+    # `spec.files` is a `Dir[]` glob, and a glob is relative to the working
+    # directory. `rake oubliette:selftest` runs these specs from inside a host
+    # application, where those globs match nothing at all.
+    packaged = Dir.chdir(root.to_s) { Gem::Specification.load(gemspec.to_s).files }
 
     locales = Dir.children(Oubliette::Text::DIRECTORY).map { |name| "lib/oubliette/locales/#{name}" }
 

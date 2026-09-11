@@ -33,7 +33,42 @@ RSpec.describe Oubliette::PathToken do
     end
   end
 
+  # Found by migrating a real project: rails' own cucumber.rake carries
+  #   ::STATS_DIRECTORIES << %w(Cucumber\ features features)
+  # where the second element is the directory. It sat against a closing paren,
+  # the lookahead did not allow one, and it was the only element left unmoved.
+  describe "a path that ends at a closing bracket" do
+    it "rewrites the last element of a word array" do
+      expect(rewrite("STATS << %w(Cucumber\\ features features)"))
+        .to eq("STATS << %w(Cucumber\\ features test/cucumber/features)")
+    end
+
+    it "rewrites a path before a closing square bracket" do
+      expect(rewrite("dirs = [features]")).to eq("dirs = [test/cucumber/features]")
+    end
+
+    it "rewrites a path followed by a comma" do
+      expect(rewrite("paths = features, other")).to eq("paths = test/cucumber/features, other")
+    end
+  end
+
   describe "what it refuses to touch" do
+    # A bare word straight after an opening paren is an argument, not a path:
+    # `File.exist?(features)` is a local variable. Rewriting it would turn
+    # working code into a NameError.
+    it "leaves a bare identifier passed as an argument alone" do
+      expect(rewrite("return true if File.exist?(features)"))
+        .to eq("return true if File.exist?(features)")
+    end
+
+    # The cost of that guard, stated so it is a decision and not a surprise: a
+    # single-element word array opens with the same two characters as a method
+    # call and is left alone too. Rewriting `File.exist?(features)` would turn
+    # working code into a NameError, which is worse than missing `%w(features)`.
+    it "leaves a one-element word array alone, which is the price of the guard" do
+      expect(rewrite("STATS << %w(features)")).to eq("STATS << %w(features)")
+    end
+
     it "leaves a path that climbs out of the project alone" do
       expect(rewrite("-r ../features")).to eq("-r ../features")
     end
