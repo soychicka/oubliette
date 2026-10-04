@@ -19,6 +19,16 @@ module Oubliette
       @root ||= default_root
     end
 
+    # Every file oubliette reads belongs to the project, and a project may
+    # legitimately hold a character outside ASCII -- an author's name, a comment,
+    # a feature written in French. Ruby tags a bare read with
+    # Encoding.default_external, which is US-ASCII wherever the environment
+    # declares no locale (a bare `docker exec`, cron, launchd, a CI image). The
+    # read succeeds and returns a string whose tag is a lie about its bytes; the
+    # regex or parse that follows is what raises. So nothing here calls
+    # Pathname#read without saying what the bytes are.
+    def read(path) = Pathname.new(path).read(encoding: "UTF-8")
+
     # Where a framework's assets actually are, for code that needs to build a
     # path of its own. This reads rollback.yml before migrate.yml on purpose: an
     # application asking at runtime wants the directory that exists, not the one

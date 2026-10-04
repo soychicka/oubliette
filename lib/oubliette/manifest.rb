@@ -45,7 +45,7 @@ module Oubliette
       file = path_in(root)
       raise Error, "#{file} not found -- run `rake oubliette:prepare` first" unless file.file?
 
-      new(root, YAML.safe_load(file.read, aliases: false) || {})
+      new(root, YAML.safe_load(Oubliette.read(file), aliases: false) || {})
     end
 
     def self.build(root)

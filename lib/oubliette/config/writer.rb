@@ -90,7 +90,7 @@ module Oubliette
 
         def read
           target = @root.join(filename)
-          target.file? ? target.read : nil
+          target.file? ? Oubliette.read(target) : nil
         end
 
         def write(contents)

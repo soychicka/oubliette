@@ -103,7 +103,7 @@ module Oubliette
         wanted = findings.to_h { |finding| [ finding.line, finding ] }
         comment = file.end_with?(".js", ".ts") ? "//" : "#"
 
-        rewritten = target.read(encoding: "UTF-8").scrub.lines.each_with_index.map do |line, index|
+        rewritten = Oubliette.read(target).scrub.lines.each_with_index.map do |line, index|
           finding = wanted[index + 1]
           next line if finding.nil?
 

@@ -50,7 +50,7 @@ module Oubliette
 
       def write
         contents = render
-        return :unchanged if path.file? && path.read == contents
+        return :unchanged if path.file? && Oubliette.read(path) == contents
 
         FileUtils.mkdir_p(path.dirname)
         path.write(contents)

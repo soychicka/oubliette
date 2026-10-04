@@ -54,7 +54,7 @@ module Oubliette
       @packages ||= begin
         file = @root.join("package.json")
         if file.file?
-          parsed = JSON.parse(file.read)
+          parsed = JSON.parse(Oubliette.read(file))
           %w[dependencies devDependencies peerDependencies].flat_map { |k| (parsed[k] || {}).keys }.uniq
         else
           []
@@ -106,14 +106,14 @@ module Oubliette
         file = @root.join("Gemfile")
         return [] unless file.file?
 
-        file.read.scan(/^\s*gem\s+["']([^"']+)["']/).flatten
+        Oubliette.read(file).scan(/^\s*gem\s+["']([^"']+)["']/).flatten
       end
 
       def lockfile_gems
         file = @root.join("Gemfile.lock")
         return [] unless file.file?
 
-        file.read.scan(/^\s{4}([a-zA-Z0-9_.\-]+) \(/).flatten
+        Oubliette.read(file).scan(/^\s{4}([a-zA-Z0-9_.\-]+) \(/).flatten
       end
   end
 end

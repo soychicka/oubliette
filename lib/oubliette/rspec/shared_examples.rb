@@ -61,7 +61,7 @@ RSpec.shared_examples "an oubliette-managed project" do |project_root|
     destination = manifest.destination("rspec-rails")
     skip "project does not use rspec" if destination.nil?
 
-    expect(root.join(".rspec").read).to include("--default-path #{destination}")
+    expect(Oubliette.read(root.join(".rspec"))).to include("--default-path #{destination}")
   end
 
   it "points cucumber.yml at the relocated features tree" do
@@ -77,7 +77,7 @@ RSpec.shared_examples "an oubliette-managed project" do |project_root|
     # Only the lines cucumber actually reads. Oubliette keeps each original
     # above its replacement, commented out, so the old path is still in the
     # file on purpose and finding it there proves nothing.
-    active = config.read.lines.reject { |line| line.strip.start_with?("#") }.join
+    active = Oubliette.read(config).lines.reject { |line| line.strip.start_with?("#") }.join
 
     expect(active).to include(destination)
     expect(active).not_to match(Oubliette::PathToken.pattern("features"))

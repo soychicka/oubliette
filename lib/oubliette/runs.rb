@@ -53,7 +53,7 @@ module Oubliette
     end
     private
       def existing
-        @path.file? ? @path.read : ""
+        @path.file? ? Oubliette.read(@path) : ""
       end
 
       def render(results, marker:, revision:)
@@ -103,7 +103,7 @@ module Oubliette
         FileUtils.mkdir_p(directory)
 
         older = directory.glob("*.log").sort
-        all = moved + older.flat_map { |file| file.read.split(/\n{2,}/).reject(&:empty?) }
+        all = moved + older.flat_map { |file| Oubliette.read(file).split(/\n{2,}/).reject(&:empty?) }
         older.each(&:delete)
 
         directory.join("#{dates_of(all)}.log").write(all.join("\n\n") + "\n")

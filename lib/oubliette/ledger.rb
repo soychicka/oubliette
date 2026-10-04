@@ -55,7 +55,7 @@ module Oubliette
     def self.load(root)
       adopt_legacy(root)
       file = path_in(root)
-      new(root, file.file? ? (YAML.safe_load(file.read, aliases: false) || {}) : {})
+      new(root, file.file? ? (YAML.safe_load(Oubliette.read(file), aliases: false) || {}) : {})
     end
 
     def initialize(root, data)

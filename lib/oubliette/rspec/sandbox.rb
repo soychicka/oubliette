@@ -71,7 +71,7 @@ module Oubliette
 
       def exist?(path) = @root.join(path).exist?
 
-      def read(path) = @root.join(path).read
+      def read(path) = Oubliette.read(@root.join(path))
 
       def write(path, contents)
         target = @root.join(path)

@@ -98,7 +98,7 @@ module Oubliette
           current = Pathname.new(root).join(writer.filename)
           next unless current.file?
 
-          rendered = writer.render(current.read)
+          rendered = writer.render(Oubliette.read(current))
           previews[writer.filename] = rendered if rendered
         end
       end

@@ -70,7 +70,7 @@ module Oubliette
     def javascript(root)
       package = root.join("package.json")
       return [] unless package.file?
-      return [] unless JSON.parse(package.read).dig("scripts", "test")
+      return [] unless JSON.parse(Oubliette.read(package)).dig("scripts", "test")
 
       [ Suite.new(**JAVASCRIPT) ]
     rescue JSON::ParserError

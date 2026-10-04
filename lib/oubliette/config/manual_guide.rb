@@ -38,7 +38,7 @@ module Oubliette
         target = @root.join(filename)
         return :unchanged unless target.file?
 
-        if target.read == render(nil)
+        if Oubliette.read(target) == render(nil)
           @log.call(Text.t("guide.removed", file: filename))
           remove
           :restored

@@ -38,7 +38,7 @@ module Oubliette
         # Scrubbed for the same reason the scanner scrubs: a real project holds
         # files with bytes that are not valid in the default encoding, and a
         # migration must not die halfway through because one of them exists.
-        source = target.read(encoding: "UTF-8").scrub
+        source = Oubliette.read(target).scrub
         rewritten = rewrite(source, from, old_dir, new_dir)
         return nil if rewritten == source
 
