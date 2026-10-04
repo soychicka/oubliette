@@ -30,6 +30,7 @@ Gem::Specification.new do |spec|
     "exe/*",
     "bin/playground",
     "README.md",
+    "assets/oubliette.svg",
     "LICENSE.txt"
   ]
   spec.bindir = "exe"

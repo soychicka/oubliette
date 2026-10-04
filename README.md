@@ -1,5 +1,7 @@
 # Oubliette
 
+<img src="assets/oubliette.svg" alt="Hands encircling a labyrinth" align="right" width="150">
+
 > *oubliette* — a dungeon reachable only through a trapdoor in its ceiling.
 
 Every test framework a Rails project picks up brings its own directory, and they
@@ -232,6 +234,57 @@ seeds, cassettes and support helpers — are pulled out of whichever framework's
 directory they happened to be sitting in and given a home of their own under
 `data/` and `support/`, so a fixture set is not the property of RSpec merely
 because RSpec was installed first.
+
+## Degrees of support
+
+Three things can happen to a framework: its directories are moved, its config is
+updated, and its suite is run before and after so the example counts prove
+nothing was lost. Which of the three you get is what the last column says.
+
+- **Verified** — moved, configured for you, then run before and after with the
+  counts compared. A suite that silently shrinks is the failure worth fearing,
+  and this is the only tier that rules it out.
+- **Configured** — moved, and pointed at the new location for you. No suite of
+  its own; it is exercised by whichever suite does run.
+- **Guided** — moved, and a generated note names the one setting to change and
+  the line to paste. You change it.
+- **Moved** — nothing to configure, because the path it is found by did not
+  change.
+
+| Ruby | Found by | Lands at | Support |
+|---|---|---|---|
+| RSpec | `rspec-rails`, `rspec` | `test/rspec` | Verified |
+| Cucumber | `cucumber-rails`, `cucumber` | `test/cucumber/features` | Verified |
+| Minitest / Rails default | `minitest`, `minitest-rails` | `test/minitest/*` | Verified\* |
+| Capybara | `capybara` | `test/rspec/system`, `test/system` | Configured |
+| VCR | `vcr` | `test/data/cassettes` | Configured |
+| SimpleCov | `simplecov` | `test/results/coverage` | Configured |
+| Test::Unit | `test-unit` | `test/unit` | Moved |
+| Aruba | `aruba` | `test/cucumber/aruba` | Moved |
+
+\* Minitest has no config to rewrite. Rails' `test` task globs the whole of
+`test/`, and the move stays inside it.
+
+| JavaScript | Found by | Lands at | Support |
+|---|---|---|---|
+| Jest | `jest` | `test/javascript/jest` | Verified\*\* |
+| Jasmine | `jasmine`, `jasmine-core` | `test/javascript/jasmine` | Verified\*\* |
+| Vitest | `vitest` | `test/javascript/vitest` | Guided |
+| Playwright | `@playwright/test`, `playwright` | `test/javascript/playwright` | Guided |
+| Cypress | `cypress` | `test/javascript/cypress` | Guided |
+| Karma | `karma` | `test/javascript/karma` | Guided |
+
+\*\* Counted through a single `npm test`, because script names are the project's
+own and guessing at a runner command is worse than using the entry point the
+project declared. Verification is therefore only as good as what that script
+drives: a jest suite `npm test` does not reach is moved but unproven.
+
+The shared asset kinds are all Configured — factories, fixtures, attribute sets,
+exemplars, seeds, support helpers and reports are moved and then wired at
+runtime, since their locations are settings rather than text in a file.
+
+Guided is a deliberate stop, not a gap waiting to be filled; see
+[What it does not do](#what-it-does-not-do).
 
 ## How the frameworks are told where to look
 
