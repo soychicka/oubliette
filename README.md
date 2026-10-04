@@ -13,11 +13,57 @@ the default commands keep working.
 
 ## Install
 
+Not on rubygems yet, so take it from the repository:
+
 ```ruby
 group :development, :test do
-  gem "oubliette"
+  gem "oubliette", github: "soychicka/oubliette"
 end
 ```
+
+Or from a checkout, which is what you want if you are changing the gem as well
+as using it:
+
+```ruby
+group :development, :test do
+  gem "oubliette", path: "../oubliette"
+end
+```
+
+On release the line becomes `gem "oubliette"` and nothing else about this
+changes.
+
+## Quick start
+
+Six commands. One of them moves anything.
+
+```bash
+bundle install
+rake oubliette:test      # what passes now -- there is nothing to compare to yet
+rake oubliette:prepare   # writes test/oubliette/migrate.yml, and stops
+rake oubliette:dry_run   # what would move, and what config would change
+rake oubliette           # do it, after answering the question it asks
+rake oubliette:test      # same suites, same counts?
+```
+
+Run `oubliette:test` **before** you migrate. It reports drift against its own
+history, so the first run is only a baseline -- without it, the run afterwards
+has nothing to be measured against, and measuring it is the entire point. A
+suite that quietly stopped collecting half its tests still exits zero.
+
+`oubliette:prepare` writes a plan and nothing else. The plan is a file you own:
+delete a gem's entry to leave that framework where it is, change an entry's
+target to send it somewhere else. `rake oubliette` then asks before acting on
+it, once.
+
+If anything is wrong:
+
+```bash
+rake oubliette:rollback  # every directory back where it started
+```
+
+Rollback also uncomments the config lines oubliette commented out. Anything you
+wrote yourself is outside the blocks it manages, so it survives both directions.
 
 ## Use
 
