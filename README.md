@@ -244,6 +244,57 @@ first met the word in a labyrinth.
 Then remove `gem "oubliette"` from your Gemfile. Nothing left behind depends on
 it.
 
+## Where it starts
+
+Nothing here was a decision. Each directory is the default of whichever tool
+created it, and the set of them is a record of the order the tools were
+installed in -- 50 directories across 15 entries in the project root:
+
+```
+.
+├── spec/             rspec, plus 14 subdirectories other tools claimed
+├── test/             minitest and test-unit, plus 20 more
+├── features/         cucumber, and features/aruba
+├── __tests__/        jest
+├── cypress/          cypress
+├── playwright/       playwright
+├── e2e/              playwright, generated the other way
+├── tests/            vitest (tests/unit), playwright (tests/e2e)
+├── jasmine/          jasmine
+├── karma/            karma
+├── coverage/         simplecov
+├── test_results/     whichever reporter wrote them
+├── tmp/screenshots/  capybara
+├── factories/        factory_bot, where nothing else claimed it
+└── db/seeds/test/    seeds meant only for tests
+```
+
+Inside `spec/`: `support`, `factories`, `fixtures`, `attributes`, `exemplars`,
+`seeds`, `vcr_cassettes`, `cassettes`, `system`, `features`, `reports`,
+`javascript`, `jasmine`, `karma`. Inside `test/`: the same list over again in
+different words, plus minitest's own `models`, `controllers`, `integration`,
+`mailers`, `helpers`, `jobs`, `channels`, `services` and `decorators`.
+
+That repetition is the part worth looking at. Several of these are one kind of
+asset in more than one place, and which one a project has is decided by which
+framework was installed first:
+
+| | found at |
+|---|---|
+| factories | `spec/factories`, `test/factories`, `factories` |
+| fixtures | `test/fixtures`, `spec/fixtures` |
+| cassettes | `spec/vcr_cassettes`, `spec/cassettes`, `test/vcr_cassettes` |
+| javascript tests | `__tests__`, `spec/javascript`, `test/javascript` |
+| reports | `test_results`, `spec/reports`, `test/reports` |
+| seeds | `spec/seeds`, `test/seeds`, `db/seeds/test` |
+
+A fixture set is RSpec's property for no better reason than that RSpec was added
+before minitest. That is what the `data/` tree below exists to undo.
+
+Directories matching `(de|un|old|legacy|new|wip)?(spec|specs|test|tests)` --
+`despec/`, `old_tests/` -- are test-shaped but belong to no framework, so they
+are listed in migrate.yml switched off, and you opt in by editing the file.
+
 ## Layout
 
 ```

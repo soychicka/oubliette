@@ -47,3 +47,26 @@ RSpec.describe "the README's degrees of support" do
     expect(defined - graded.uniq).to be_empty
   end
 end
+
+# The before-picture is the one part of the README that is a claim about other
+# people's projects rather than about this gem, so it is the part a reader has
+# no way to check. A catalog entry that starts somewhere new belongs in it.
+RSpec.describe "the README's picture of where test assets start" do
+  let(:readme) { Pathname.new(File.expand_path("../../../../README.md", __dir__)) }
+  let(:section) { readme.read(encoding: "UTF-8")[/^## Where it starts$.*?(?=^## )/m].to_s }
+
+  let(:origins) { Oubliette::Catalog.entries.flat_map { |entry| entry[:moves].keys }.uniq }
+
+  it "exists" do
+    expect(section).not_to be_empty
+  end
+
+  it "names every root directory a framework starts in" do
+    roots = origins.map { |path| path.split("/").first }.uniq
+    expect(roots.reject { |root| section.include?("#{root}/") }).to be_empty
+  end
+
+  it "counts what the catalog actually holds" do
+    expect(section).to include("#{origins.size} directories", "#{origins.map { |path| path.split('/').first }.uniq.size} entries")
+  end
+end
