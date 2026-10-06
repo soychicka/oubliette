@@ -5,33 +5,23 @@
 > *oubliette* — a dungeon reachable only through a trapdoor in its ceiling.
 
 Every test framework a Rails project picks up brings its own directory, and they
-all land in the project root: `spec/`, `features/`, `test/`, `cypress/`,
-`coverage/`, `test_results/`, plus the fixture and factory data they quietly
-share. Oubliette works out which frameworks are actually in use, moves their
-assets under a single `test/` tree, and rewrites each framework's own config so
-the default commands keep working.
+all land in the project root: 
+`spec/`, `features/`, `test/`, `cypress/`, `coverage/`, `test_results/`
+plus the fixture and factory data they quietly share. 
+
+Oubliette works out which frameworks are actually in use, rehomes each of those directories under a unified `test/` tree, and updates each framework's config so the default commands keep working.
+
+And it can be rolled back by referring to Hoggle from Labyrinth.
 
 ## Install
 
-Not on rubygems yet, so take it from the repository:
+Not on rubygems yet, so snag it from the repository:
 
 ```ruby
 group :development, :test do
   gem "oubliette", github: "soychicka/oubliette"
 end
 ```
-
-Or from a checkout, which is what you want if you are changing the gem as well
-as using it:
-
-```ruby
-group :development, :test do
-  gem "oubliette", path: "../oubliette"
-end
-```
-
-On release the line becomes `gem "oubliette"` and nothing else about this
-changes.
 
 ## Quick start
 
@@ -514,3 +504,16 @@ untracked changes (`FORCE=1` overrides). Generated directories it knows about --
 `coverage/` above all -- should be in `.gitignore`, or the first SimpleCov run
 will block the next migration. Moves go through `git mv` where git
 will take them, so history follows the files.
+
+
+# Contributing:  
+
+Fork it, create a branch and add:
+
+```ruby
+group :development, :test do
+  gem "oubliette", path: "../oubliette"
+end
+```
+
+If you have comments/questions/eye rolls, send them here, twitter.
